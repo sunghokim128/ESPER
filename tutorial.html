@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ESPER Tutorial</title>
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <button type="button" class="lang" data-lang-toggle aria-label="Language">한국어</button>
+
+    <main>
+      <h1>ESPER</h1>
+      <p class="intro" data-i18n="intro">ESPER is basically Anki made easy. Turn an Excel sheet or an Anki deck into spaced-repetition flashcards and start studying right away.</p>
+
+      <div class="video">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/8T2uMGmNtFw?autoplay=1&mute=1&playsinline=1&rel=0"
+          title="ESPER demo"
+          allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      </div>
+
+      <a class="start" href="./" data-i18n="start">Start studying</a>
+    </main>
+
+    <script>
+      const T = {
+        en: {
+          intro: 'ESPER is basically Anki made easy. Turn an Excel sheet or an Anki deck into spaced-repetition flashcards and start studying right away.',
+          start: 'Start studying',
+          toggle: '한국어',
+        },
+        ko: {
+          intro: 'ESPER는 쉬운 Anki예요. 엑셀 파일이나 Anki 덱을 간격 반복 플래시카드로 바꿔서 바로 학습을 시작해 보세요.',
+          start: '학습하러 가기',
+          toggle: 'English',
+        },
+      };
+      let lang = localStorage.getItem('esper-landing-lang')
+        || (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Seoul' ? 'ko' : 'en');
+      function apply() {
+        document.documentElement.lang = lang;
+        document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = T[lang][el.dataset.i18n]; });
+        document.querySelector('[data-lang-toggle]').textContent = T[lang].toggle;
+      }
+      document.querySelector('[data-lang-toggle]').addEventListener('click', () => {
+        lang = lang === 'ko' ? 'en' : 'ko';
+        localStorage.setItem('esper-landing-lang', lang);
+        apply();
+      });
+      apply();
+    </script>
+  </body>
+</html>

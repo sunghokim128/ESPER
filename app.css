@@ -6138,3 +6138,26 @@ html[data-img-a4="fill"] .a4-print-sheet .cell-img { max-height: 45mm; }
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.how-to-use-link {
+  display: inline-flex;
+  min-height: 34px;
+  flex: none;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid #8f5a3c;
+  border-radius: 999px;
+  background: #fffefa;
+  color: #8f5a3c;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .2s, color .2s;
+}
+
+.how-to-use-link:hover,
+.how-to-use-link:focus-visible {
+  background: #8f5a3c;
+  color: #fff;
+}

@@ -67,6 +67,7 @@ The project folder name is the uploaded workbook filename without its extension.
 | File | Purpose |
 |---|---|
 | `index.html` | App document |
+| `tutorial.html`, `landing.css` | Tutorial (demo video) page |
 | `app.css` | Interface, Study cards, A4 view, and print styles |
 | `app.js` | Language, project, navigation, Study, and A4 view behavior |
 | `assets/guide/downloads/` | Bilingual AI prompts |

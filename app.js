@@ -831,7 +831,7 @@ async function load() {
     state.projectOrder = state.projects.map((project) => project.id);
     const savedLanguage = await getLanguage();
     if (savedLanguage) setLanguageValue(savedLanguage);
-    else state.languageChoicePending = true;
+    else setLanguageValue(Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Seoul' ? 'ko' : 'en');
     state.studySettings = normalizeStudySettings(await getStudySettings());
     const savedDirectory = await getStoredWorkbookDirectory();
     state.directoryHandle = savedDirectory;
@@ -2422,6 +2422,8 @@ function languageChoiceHTML() {
     </div>`;
 }
 
+const TUTORIAL_PAGE_URL = 'tutorial.html';
+
 function headerHTML() {
   const projectsActive = ['home', 'workspace', 'edit'].includes(state.page);
   const canNavigateProject = Boolean(state.project);
@@ -2443,6 +2445,7 @@ function headerHTML() {
         <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>A4 view</button>
       </nav>` : ''}
       <div class="site-head-right">
+        <a class="how-to-use-link" href="${TUTORIAL_PAGE_URL}" target="_blank" rel="noopener noreferrer">${L('튜토리얼', 'Tutorial')}</a>
         ${workspaceActions}
         ${languageSelectHTML()}
       </div>
