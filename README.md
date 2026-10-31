@@ -4,7 +4,7 @@ Anki is extremely effective, but many people give up on it because it is hard to
 
 ESPER is a static web app (GitHub Pages) for studying any set of information organized as key, value, and hint. Use the flashcard-based **Study page** for active recall or open the printable **A4 view** to review a whole set at a glance. FSRS manages card state and review scheduling locally in the browser.
 
-On first launch, choose **한국어 사용자** or **English user**. Change the language at any time from the settings menu. Language changes the interface, tutorial, AI prompt, and support QR only; it does not change workbook contents or study progress.
+On first launch, choose **한국어 사용자** or **English user**. Change the language at any time from the settings menu. Language changes the interface, AI prompt, and support QR only; it does not change workbook contents or study progress.
 
 ## Usage
 
@@ -12,7 +12,7 @@ Open https://sunghokim128.github.io/ESPER/ in a Chromium-based browser (Chrome o
 
 ## Getting started
 
-1. Choose a language when prompted. The in-app tutorial starts only when you click **Tutorial**; the format guide is available in Korean and English.
+1. Choose a language when prompted. The format guide is available in Korean and English.
 2. Select the sample cartridge or add an Excel, CSV, TXT, TSV, Anki `.apkg`, or ESPER `.espr` file. The tutorial sample has image hints for **Eat**, **Adversity**, **Truculent**, **FSRS-7 algorithm**, and **Retention**; its definitions follow the selected language. Opening a cartridge takes you directly to its Study page.
 3. On the Study page, try to recall the value for each key. Flip the card to reveal the value, then open its hint if needed. Rate your recall **Again**, **Hard**, **Good**, or **Easy**.
 4. Use the header to switch between **Study**, **A4 view**, **Learning status** (a compact key-card overview whose opacity reflects estimated recall; select a card for its value, hint, recall probability, and FSRS details), and **Progress** (session records). Open **Menu** for language and study settings, keyboard shortcuts, PDF export, and a link to the home page.

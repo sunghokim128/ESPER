@@ -7,7 +7,6 @@ import {
   writeSheetGrid,
   createStudyWorkbook,
 } from './lib/parseSheet.js';
-import { createTutorial } from './lib/tutorial.js';
 import { normalizeColumnWidths, resizeAdjacentColumns } from './lib/columnSizing.js';
 import { indexStudyPairs } from './lib/studyPairs.js';
 import { AnkiImportError, buildAnkiRows, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js';
@@ -137,401 +136,7 @@ studyTooltip.hidden = true;
 studyTooltip.setAttribute('role', 'tooltip');
 document.body.appendChild(studyTooltip);
 
-const guidedTourEl = document.createElement('div');
-guidedTourEl.className = 'guided-tour';
-guidedTourEl.hidden = true;
-document.body.appendChild(guidedTourEl);
-
-const guidedTourSteps = [
-  {
-    selector: '.a4-sheet .study-value-toggle',
-    title: 'value 확인하기',
-    description: 'value 칸을 눌러 답을 확인하거나 다시 가릴 수 있어요.',
-  },
-  {
-    id: 'key',
-    selector: '.a4-sheet .study-key-trigger',
-    title: 'hint 보기',
-    description: 'key를 누르면 기억을 돕는 hint가 펼쳐져요.',
-  },
-];
-const studyGuidedTourSteps = [
-  {
-    id: 'study-start',
-    selector: '.study-start-button',
-    title: '학습하기 시작',
-    description: 'Start를 누르면 타이머가 시작되고 첫 key가 표시돼요. 카드를 보고 value를 떠올려 보세요.',
-  },
-  {
-    selector: '.study-card',
-    title: 'key와 value',
-    description: '카드를 누르거나 Space를 눌러 value를 확인하세요. value는 정답, 정의 등 자유롭게 정할 수 있어요.',
-  },
-  {
-    id: 'study-hint',
-    selector: '.study-hint-toggle',
-    fallbackSelector: '.study-card',
-    title: '필요할 때 hint 확인',
-    description: 'hint에는 예문이나 임상 사례처럼 기억을 돕는 단서를 넣을 수 있어요.',
-  },
-  {
-    selector: '.study-card-actions',
-    title: '복습 평가하기',
-    description: '답을 확인한 뒤 Again, Hard, Good, Easy 중 하나를 선택하면 FSRS가 다음 복습 일정을 계산해요.',
-  },
-];
-const homeGuidedTourSteps = [
-  {
-    id: 'home-format-button',
-    selector: '[data-open-format-guide]',
-    title: '학습 프로젝트 만들기',
-    description: '필요한 엑셀 형식을 확인하고, 샘플을 받거나 AI로 만들거나 Anki 학습 목록을 가져올 수 있어요.',
-  },
-  {
-    id: 'home-format',
-    selector: '.format-guide-modal .format-example-table',
-    title: '새 엑셀 규격: A=key, B=value, C=hint',
-    description: '첫 행은 제목이고 2행부터 항목을 입력해요. A열에는 외울 항목, B열에는 답, C열에는 선택 힌트를 넣습니다. 기존 학습 상태 열은 더 이상 사용하지 않아요.',
-  },
-  {
-    id: 'home-gpt',
-    selector: '.format-guide-modal .workspace-guide-resource',
-    title: 'AI로 학습 목록 만들기',
-    description: '엑셀 생성 바로가기를 누르면 프롬프트가 입력된 ChatGPT가 열려요. 만들고 싶은 key 목록이나 주제를 입력해 보세요.',
-  },
-];
-const guidedTourStepsEn = [
-  {
-    selector: '.a4-sheet .study-value-toggle',
-    title: 'Reveal the value',
-    description: 'Click the value cell to reveal the answer, then click again to hide it.',
-  },
-  {
-    id: 'key',
-    selector: '.a4-sheet .study-key-trigger',
-    title: 'Open the hint',
-    description: 'Click a key to reveal its hint, which can be an example, a clue, or another memory aid.',
-  },
-];
-const studyGuidedTourStepsEn = [
-  {
-    id: 'study-start',
-    selector: '.study-start-button',
-    title: 'Start studying',
-    description: 'The sample mixes English vocabulary with FSRS-7. All five cards have image hints. Press Start and try to recall each answer before flipping the card.',
-  },
-  {
-    selector: '.study-card',
-    title: 'Key and value',
-    description: 'Click the card or press Space to reveal the value. The value can be an answer, definition, or any information you want to recall.',
-  },
-  {
-    id: 'study-hint',
-    selector: '.study-hint-toggle',
-    fallbackSelector: '.study-card',
-    title: 'Use a hint when you need one',
-    description: 'A hint might be an example sentence, a clinical scenario, or another cue that helps you remember.',
-  },
-  {
-    selector: '.study-card-actions',
-    title: 'Rate your recall',
-    description: 'After checking the answer, choose Again, Hard, Good, or Easy. FSRS calculates the next review time.',
-  },
-];
-const homeGuidedTourStepsEn = [
-  {
-    id: 'home-format-button',
-    selector: '[data-open-format-guide]',
-    title: 'Create a learning project',
-    description: 'Check the required spreadsheet format, then download a sample, create a set with AI, or bring in Anki notes.',
-  },
-  {
-    id: 'home-format',
-    selector: '.format-guide-modal .format-example-table',
-    title: 'New Excel format: A=key, B=value, C=hint',
-    description: 'Use row 1 for headers and start items on row 2. Put the prompt in column A, its answer in B, and an optional hint in C. The old learning-status column is no longer used.',
-  },
-  {
-    id: 'home-gpt',
-    selector: '.format-guide-modal .workspace-guide-resource',
-    title: 'Build a study set with AI',
-    description: 'Open in ChatGPT launches ChatGPT with the prompt ready. Enter the keys or topic you want to study to create a universal spreadsheet.',
-  },
-];
-const a4TourSteps = () => (isEnglish() ? guidedTourStepsEn : guidedTourSteps);
-
 let studyTooltipTarget = null;
-let guidedTourTarget = null;
-let guidedTourActive = false;
-let guidedTourLoopRunning = false;
-let guidedTourStep = 0;
-let guidedTourMode = 'a4';
-
-function activeGuidedTourSteps() {
-  if (guidedTourMode === 'study') return isEnglish() ? studyGuidedTourStepsEn : studyGuidedTourSteps;
-  if (guidedTourMode === 'home') return isEnglish() ? homeGuidedTourStepsEn : homeGuidedTourSteps;
-  return a4TourSteps();
-}
-
-function tourFocusRect(target) {
-  const rect = target.getBoundingClientRect();
-  const step = activeGuidedTourSteps()[guidedTourStep];
-  if (guidedTourMode === 'study' && step?.id === 'study-hint') {
-    const card = document.querySelector('.study-card')?.getBoundingClientRect();
-    if (!card) return rect;
-    // Keep the card and its opened hint clear of the tour card.
-    const bottom = Math.max(rect.bottom, card.bottom);
-    return { left: Math.min(rect.left, card.left), top: Math.min(rect.top, card.top), bottom };
-  }
-  if (guidedTourMode === 'home' && step?.id === 'home-format') {
-    // The column description below the image changes on hover, so keep it clear of the tour card.
-    const caption = target.closest('.spreadsheet-example')?.querySelector('.guide-column-detail')?.getBoundingClientRect();
-    if (!caption) return rect;
-    return { left: rect.left, top: rect.top, bottom: Math.max(rect.bottom, caption.bottom) };
-  }
-  if (guidedTourMode !== 'a4' || (step?.id !== 'key' && step?.id !== 'hint')) return rect;
-  const row = target.closest('.study-sheet-row');
-  const parts = [rect, row?.querySelector('.study-key-trigger')?.getBoundingClientRect(), row?.querySelector('.study-hint-content')?.getBoundingClientRect()]
-    .filter(Boolean);
-  const union = {
-    left: Math.min(...parts.map((r) => r.left)),
-    top: Math.min(...parts.map((r) => r.top)),
-    bottom: Math.max(...parts.map((r) => r.bottom)),
-  };
-  if (step.id === 'key' && !row?.querySelector('.study-hint-content')) union.bottom += 56;
-  return union;
-}
-
-function updateGuidedTourPosition(target) {
-  const card = guidedTourEl.querySelector('.guided-tour-card');
-  if (!card) return;
-  const rect = tourFocusRect(target);
-  const cardRect = card.getBoundingClientRect();
-  const margin = 16;
-  const left = Math.max(margin, Math.min(window.innerWidth - cardRect.width - margin, rect.left));
-  const belowTop = rect.bottom + 14;
-  const top = belowTop + cardRect.height <= window.innerHeight - margin
-    ? belowTop
-    : Math.max(margin, rect.top - cardRect.height - 14);
-  card.style.left = `${left}px`;
-  card.style.top = `${top}px`;
-}
-
-// Regions that must stay bright and clickable: the highlighted target plus
-// every area where the step's action visibly changes something.
-function guidedTourHoleRects(target) {
-  const step = activeGuidedTourSteps()[guidedTourStep];
-  const elements = [target];
-  const add = (selector) => document.querySelectorAll(selector).forEach((el) => elements.push(el));
-  if (guidedTourMode === 'home') {
-    if (step?.id !== 'home-format-button') add('#formatGuideModal > *');
-  } else if (guidedTourMode === 'study') {
-    add('.study-ready, .study-card, .study-card-actions');
-  } else {
-    const row = target.closest('.study-sheet-row');
-    if (row) elements.push(row);
-  }
-  const pad = 8;
-  const rects = elements
-    .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 0 && r.height > 0)
-    .map((r) => ({
-      left: Math.max(0, r.left - pad),
-      top: Math.max(0, r.top - pad),
-      right: Math.min(window.innerWidth, r.right + pad),
-      bottom: Math.min(window.innerHeight, r.bottom + pad),
-    }));
-  // Overlapping holes would cancel out under evenodd, so merge them first.
-  const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 0; i < rects.length && !merged; i += 1) {
-      for (let j = i + 1; j < rects.length; j += 1) {
-        if (!overlaps(rects[i], rects[j])) continue;
-        const a = rects[i];
-        const b = rects[j];
-        rects[i] = {
-          left: Math.min(a.left, b.left),
-          top: Math.min(a.top, b.top),
-          right: Math.max(a.right, b.right),
-          bottom: Math.max(a.bottom, b.bottom),
-        };
-        rects.splice(j, 1);
-        merged = true;
-        break;
-      }
-    }
-  }
-  return rects;
-}
-
-function updateGuidedTourShield() {
-  const shield = guidedTourEl.querySelector('.guided-tour-shield');
-  if (!shield || !guidedTourTarget) return;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const holes = guidedTourHoleRects(guidedTourTarget)
-    .map((r) => `M${r.left} ${r.top}H${r.right}V${r.bottom}H${r.left}Z`)
-    .join('');
-  shield.style.clipPath = `path(evenodd, "M0 0H${w}V${h}H0Z${holes}")`;
-}
-
-function guidedTourShieldLoop() {
-  if (!guidedTourActive) {
-    guidedTourLoopRunning = false;
-    return;
-  }
-  updateGuidedTourShield();
-  requestAnimationFrame(guidedTourShieldLoop);
-}
-
-function clearGuidedTourHighlights() {
-  document.querySelectorAll('.guided-tour-target, .guided-tour-glow').forEach((el) => {
-    el.classList.remove('guided-tour-target', 'guided-tour-glow');
-  });
-}
-
-function setFormatGuideOpen(open) {
-  const modal = document.getElementById('formatGuideModal');
-  if (modal) modal.hidden = !open;
-}
-
-function finishGuidedTour() {
-  if (guidedTourMode === 'home') setFormatGuideOpen(false);
-  guidedTourActive = false;
-  guidedTourMode = 'a4';
-  clearGuidedTourHighlights();
-  guidedTourTarget = null;
-  guidedTourEl.hidden = true;
-  guidedTourEl.innerHTML = '';
-}
-
-function renderGuidedTour() {
-  const isStudyTour = guidedTourMode === 'study';
-  const isHomeTour = guidedTourMode === 'home';
-  const expectedPage = isHomeTour ? 'workspace' : isStudyTour ? 'study' : 'a4';
-  if (!guidedTourActive || state.page !== expectedPage) {
-    finishGuidedTour();
-    return;
-  }
-
-  const steps = activeGuidedTourSteps();
-  const step = steps[guidedTourStep];
-  if (isHomeTour) setFormatGuideOpen(step.id !== 'home-format-button');
-  const tourName = isHomeTour ? L('시작하기 둘러보기', 'Getting started') : isStudyTour ? L('학습하기 둘러보기', 'Study tour') : L('A4 view 둘러보기', 'A4 view tour');
-  const hintStep = !isStudyTour && (step.id === 'key' || step.id === 'hint');
-  if (hintStep && step.id === 'hint' && !document.querySelector('.a4-sheet .study-hint-content')) {
-    const trigger = document.querySelector('.a4-sheet .study-key-trigger');
-    if (trigger && trigger.dataset.id && !state.expandedA4Hints.has(trigger.dataset.id)) {
-      state.expandedA4Hints.add(trigger.dataset.id);
-      renderA4View();
-      return;
-    }
-  }
-  let targets = [...document.querySelectorAll(step.selector)];
-  if (!targets.length && step.fallbackSelector) targets = [...document.querySelectorAll(step.fallbackSelector)];
-  let target = targets[0];
-  if (step.id === 'key') {
-    const openRow = document.querySelector('.a4-sheet .study-hint-visible .study-key-trigger');
-    if (openRow) target = openRow;
-  }
-  const previousTarget = guidedTourTarget;
-  clearGuidedTourHighlights();
-  guidedTourTarget = target || null;
-  if (hintStep && target) {
-    const row = target.closest('.study-sheet-row');
-    if (step.id === 'key') row?.querySelector('.study-hint-content')?.classList.add('guided-tour-target');
-    else row?.querySelector('.study-key-trigger')?.classList.add('guided-tour-target');
-  }
-  if (!target) {
-    guidedTourEl.hidden = false;
-    guidedTourEl.innerHTML = `
-      <div class="guided-tour-card" role="dialog" aria-modal="false" aria-labelledby="guidedTourTitle">
-        <button type="button" class="guided-tour-close" data-tour-action="close" aria-label="${L('기능 둘러보기 닫기', 'Close tour')}">×</button>
-        <p class="guided-tour-progress">${tourName} · ${guidedTourStep + 1} / ${steps.length}</p>
-        <h2 id="guidedTourTitle">${L('안내할 위치를 찾을 수 없어요', 'Can\'t find this spot')}</h2>
-        <p>${L('다음 단계로 이동하거나 기능 둘러보기를 닫을 수 있어요.', 'Move on to the next step or close the tour.')}</p>
-        <div class="guided-tour-actions">
-          ${step.id === 'study-start' ? '' : `<button type="button" class="guided-tour-next" data-tour-action="next">${L('다음', 'Next')}</button>`}
-        </div>
-      </div>`;
-    const card = guidedTourEl.querySelector('.guided-tour-card');
-    card.style.left = '16px';
-    card.style.top = '16px';
-    return;
-  }
-
-  target.classList.add(step.glow ? 'guided-tour-glow' : 'guided-tour-target');
-  if (previousTarget !== target || step.id === 'hint') {
-    target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-  }
-
-  guidedTourEl.hidden = false;
-  guidedTourEl.innerHTML = `
-    <div class="guided-tour-shield"></div>
-    <div class="guided-tour-card" role="dialog" aria-modal="false" aria-labelledby="guidedTourTitle">
-      <button type="button" class="guided-tour-close" data-tour-action="close" aria-label="${L('기능 둘러보기 닫기', 'Close tour')}">×</button>
-      <p class="guided-tour-progress">${tourName} · ${guidedTourStep + 1} / ${steps.length}</p>
-      <h2 id="guidedTourTitle">${esc(step.title)}</h2>
-      <p>${esc(step.description)}</p>
-      <div class="guided-tour-actions">
-        ${guidedTourStep > 0 && !(isStudyTour && guidedTourStep === 1)
-          ? `<button type="button" class="guided-tour-previous" data-tour-action="previous">${L('이전', 'Back')}</button>`
-          : ''}
-        ${step.id === 'study-start'
-          ? ''
-          : `<button type="button" class="guided-tour-next" data-tour-action="next">${guidedTourStep === steps.length - 1 && !isStudyTour ? L('완료', 'Done') : L('다음', 'Next')}</button>`}
-      </div>
-    </div>`;
-  updateGuidedTourShield();
-  if (!guidedTourLoopRunning) {
-    guidedTourLoopRunning = true;
-    requestAnimationFrame(guidedTourShieldLoop);
-  }
-  requestAnimationFrame(() => {
-    if (guidedTourActive && guidedTourTarget === target) updateGuidedTourPosition(target);
-  });
-}
-
-guidedTourEl.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-tour-action]');
-  if (!button) return;
-  if (button.dataset.tourAction === 'close') {
-    finishGuidedTour();
-  } else if (button.dataset.tourAction === 'previous') {
-    guidedTourStep = Math.max(0, guidedTourStep - 1);
-    renderGuidedTour();
-  } else if (button.dataset.tourAction === 'next') {
-    const steps = activeGuidedTourSteps();
-    if (guidedTourStep === steps.length - 1) {
-      if (guidedTourMode === 'study') {
-        guidedTourMode = 'home';
-        guidedTourStep = 0;
-        state.study = null;
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-        state.page = 'workspace';
-        render();
-        return;
-      }
-      finishGuidedTour();
-    } else {
-      guidedTourStep += 1;
-      renderGuidedTour();
-    }
-  }
-});
-
-window.addEventListener('resize', () => {
-  if (guidedTourActive && guidedTourTarget) updateGuidedTourPosition(guidedTourTarget);
-});
-window.addEventListener('scroll', () => {
-  if (guidedTourActive && guidedTourTarget) updateGuidedTourPosition(guidedTourTarget);
-}, true);
-document.addEventListener('keydown', (event) => {
-  if (guidedTourActive && event.key === 'Escape') finishGuidedTour();
-});
-
 function positionStudyTooltip(clientX, clientY) {
   const rect = studyTooltip.getBoundingClientRect();
   const left = Math.max(8 + rect.width / 2, Math.min(window.innerWidth - 8 - rect.width / 2, clientX));
@@ -1296,7 +901,6 @@ async function changeLanguage(value) {
   state.languageChoicePending = false;
   state.error = '';
   state.notice = '';
-  if (guidedTourActive) finishGuidedTour();
   mountSupportWidget();
   if (previousLanguage !== language) loadGenerationPrompt().then(() => {
     if (['workspace', 'home'].includes(state.page)) render();
@@ -1931,17 +1535,6 @@ async function connectWorkbookDirectory() {
   }
 }
 
-const tutorial = createTutorial({
-  state,
-  Rating: FsrsRating,
-  render: () => render(),
-  handleFile: (file) => handleFile(file),
-  fsrsRecordForCard: (id) => fsrsRecordForCard(id),
-  getLanguage: () => language,
-  getSampleFileName: () => SAMPLE_FILE_NAMES[language],
-  restoreSampleCartridge: () => { state.sampleCartridgeDismissed = { ko: false, en: false }; },
-});
-
 async function startSampleProject(destination = 'study') {
   if (state.busy) return;
   state.error = '';
@@ -1951,10 +1544,6 @@ async function startSampleProject(destination = 'study') {
   const existingSample = state.projects.find((project) => project.sourceName === sampleFileName);
   if (existingSample) {
     await openProject(existingSample.id, destination);
-    if (tutorial.isActive() && state.project && state.page === 'study') {
-      state.page = 'project-setup';
-      render();
-    }
     return;
   }
 
@@ -1985,7 +1574,7 @@ async function startSampleProject(destination = 'study') {
       { type: 'application/x-espr' }
     );
     await handleFile(sampleFile);
-    if (!tutorial.isActive() && state.project && state.sourceName === sampleFileName) {
+    if (state.project && state.sourceName === sampleFileName) {
       await routeToProjectDestination(destination);
     }
   } catch (error) {
@@ -2814,11 +2403,6 @@ function headerHTML() {
   const workspaceActions = ['workspace', 'home'].includes(state.page)
     ? folderConnectionHTML(true)
     : '';
-  const projectTools = state.page === 'workspace'
-    ? `<div class="site-head-tools">
-        <button type="button" class="guided-tour-start" data-start-tutorial aria-label="${L('샘플 학습 목록 튜토리얼 시작', 'Start the sample study set tutorial')}"${state.busy ? ' disabled' : ''}><span aria-hidden="true">?</span> ${L('튜토리얼', 'Tutorial')}</button>
-      </div>`
-    : '';
   return `
     <header class="site-head${showGlobalNav ? '' : ' projects-header'}">
       <button type="button" id="homeBtn" class="brand${projectsActive ? ' is-active' : ''}" aria-label="${L('프로젝트로 이동', 'Go to projects')}" title="${L('프로젝트로 이동합니다.', 'Go to projects.')}"${projectsActive ? ' aria-current="page"' : ''}>
@@ -2833,7 +2417,6 @@ function headerHTML() {
       </nav>` : ''}
       <div class="site-head-right">
         ${workspaceActions}
-        ${projectTools}
         ${languageSelectHTML()}
       </div>
     </header>`;
@@ -4088,7 +3671,6 @@ function renderA4View() {
   }
   if (!totalPages) {
     box.innerHTML = `<div class="empty-box">${state.a4Query.trim() ? L('검색 결과가 없어요.', 'No results found.') : L('학습할 항목이 없어요. 홈에서 프로젝트를 확인해 주세요.', 'There are no items to study. Check your project on the home page.')}</div>`;
-    renderGuidedTour();
     return;
   }
 
@@ -4108,7 +3690,6 @@ function renderA4View() {
     })
     .join('');
   box.scrollTop = scrollTop;
-  renderGuidedTour();
 }
 
 function syncStudyValueControls(box) {
@@ -4200,7 +3781,6 @@ function render() {
       }, 3_600_000);
     }
   }
-  if (guidedTourActive && (guidedTourMode === 'study' || guidedTourMode === 'home')) renderGuidedTour();
   const a4PreviewBox = document.getElementById('a4PreviewBox');
   if (a4PreviewBox) resizeObserver.observe(a4PreviewBox);
 }
@@ -4377,10 +3957,6 @@ function beginStudySession() {
   session.started = true;
   session.startedAt = Date.now();
   enterStudyCard(session);
-  if (guidedTourActive && guidedTourMode === 'study' &&
-    activeGuidedTourSteps()[guidedTourStep]?.id === 'study-start') {
-    guidedTourStep += 1;
-  }
   render();
 }
 
@@ -5475,12 +5051,6 @@ function attach() {
     });
   }
 
-  const guidedTourStartButton = appEl.querySelector('[data-start-tutorial]');
-  if (guidedTourStartButton) {
-    guidedTourStartButton.addEventListener('click', () => {
-      tutorial.start();
-    });
-  }
 
   const startNewProject = () => {
     if (!state.directoryConnected) {
@@ -5500,10 +5070,6 @@ function attach() {
   appEl.querySelectorAll('[data-open-project]').forEach((button) => {
     button.addEventListener('click', async () => {
       await openProject(button.dataset.openProject);
-      if (tutorial.isActive() && state.project && state.page === 'study') {
-        state.page = 'project-setup';
-        render();
-      }
     });
   });
   appEl.querySelectorAll('[data-project-menu-toggle]').forEach((toggle) => {
