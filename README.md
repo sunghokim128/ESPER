@@ -76,3 +76,7 @@ The project folder name is the uploaded workbook filename without its extension.
 | `lib/fsrs.js` | FSRS-7 scheduling, card synchronization, and JSON validation |
 | `vendor/ts-fsrs/` | Locally bundled official `ts-fsrs` 6.0.0 browser build and license |
 | `lib/sheetPages.js` | A4 pagination and item ordering |
+
+## Acknowledgements
+
+ESPER's scheduling uses the open-source FSRS (Free Spaced Repetition Scheduler) algorithm and its TypeScript implementation, [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs), developed by the [open-spaced-repetition](https://github.com/open-spaced-repetition) community. The bundled copy and its license are in `vendor/ts-fsrs/`.
