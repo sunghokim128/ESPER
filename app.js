@@ -1469,23 +1469,6 @@ async function prepareWorkbookDirectory(directory) {
 
 async function connectWorkbookDirectory() {
   try {
-    if (state.directoryHandle && !state.directoryAccessIssue) {
-      const allowed = await ensureWorkbookDirectoryAccess();
-      if (allowed) {
-        try {
-          const result = await prepareWorkbookDirectory(state.directoryHandle);
-          state.error = '';
-          state.notice = result.recoveredCount
-            ? L(`저장 위치에서 프로젝트 ${result.recoveredCount}개를 복구했어요.`, `Recovered ${result.recoveredCount} project(s) from the save location.`)
-            : L(`${state.directoryName} 폴더 접근 권한을 허용했어요.`, `Access to the ${state.directoryName} folder was granted.`);
-        } catch (error) {
-          state.error = L(`저장 폴더 자료를 불러오지 못했어요: ${error instanceof Error ? error.message : String(error)}`, `Could not load projects from the save folder: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        render();
-      }
-      return;
-    }
-
     if (typeof window.showDirectoryPicker !== 'function') {
       state.error = L('이 브라우저에서는 폴더 선택 기능을 사용할 수 없어요. 최신 Chrome에서 다시 시도해 주세요.', 'This browser cannot choose folders. Please try again in the latest Chrome.');
       render();
@@ -1495,16 +1478,6 @@ async function connectWorkbookDirectory() {
       id: 'esper-excel-projects',
       mode: 'readwrite',
     });
-    if (state.projects.length && !state.directoryHandle) {
-      state.error = L('기존 프로젝트의 저장 위치를 확인할 수 없어 다른 폴더로 연결하지 않았어요. 기존 저장 폴더를 다시 선택해 주세요.', 'Could not verify where your existing projects are saved, so no other folder was connected. Please choose the original save folder again.');
-      render();
-      return;
-    }
-    if (state.projects.length && !(await state.directoryHandle.isSameEntry(directory))) {
-      state.error = L('기존 프로젝트는 현재 저장 폴더에 있어요. 프로젝트를 삭제하거나 기존에 선택한 저장 폴더를 다시 연결해 주세요.', 'Your existing projects are in the current save folder. Delete the projects or reconnect the folder you chose before.');
-      render();
-      return;
-    }
     await saveWorkbookDirectory(directory);
     state.directoryHandle = directory;
     state.directorySaved = true;
@@ -2616,20 +2589,25 @@ function formatGuideHTML() {
 }
 
 function folderConnectionHTML(compact = false) {
-  const selectionButton = !state.directoryName || state.directoryAccessIssue
-    ? `<button type="button" id="connectFolderBtn" class="btn">${L('저장 위치 선택', 'Choose save location')}</button>`
-    : '';
-  const location = state.directoryName && !state.directoryAccessIssue
-    ? `<span class="folder-location-label" title="${esc(state.directoryName)}">${L('저장 위치', 'Save location')}: ${esc(state.directoryName)}</span>`
-    : '';
   const issue = state.directoryAccessIssue
     ? `<span class="folder-location-issue" role="status">${esc(state.directoryAccessIssue)}</span>`
+    : '';
+  const hasLocation = Boolean(state.directoryName && !state.directoryAccessIssue);
+  const buttonLabel = hasLocation
+    ? `${L('저장 위치', 'Save location')}: ${state.directoryName} · ${L('변경', 'Change')}`
+    : L('저장 위치 선택', 'Choose save location');
+  const selectionButton = `<button type="button" id="connectFolderBtn" class="btn folder-location-button" title="${esc(buttonLabel)}">${esc(buttonLabel)}</button>`;
+  const warning = state.directoryName
+    ? `<span class="folder-location-warning">${L('이전에 저장한 내용을 불러오려면 같은 저장 위치를 선택해야 해요.', 'To load previously saved content, choose the same save location as before.')}</span>`
     : '';
 
   return `
     <div class="folder-connection${compact ? ' folder-connection-compact' : ''}${state.directoryAccessIssue ? ' has-issue' : ''}">
-      ${state.directoryAccessIssue ? issue : location}
-      ${selectionButton}
+      ${issue}
+      <div class="folder-connection-action">
+        ${selectionButton}
+        ${warning}
+      </div>
     </div>`;
 }
 

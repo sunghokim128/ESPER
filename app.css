@@ -283,15 +283,28 @@ body:has(.app-shell.workspace-page) {
   font-size: 14px;
 }
 
-.folder-location-label {
-  display: block;
+.folder-location-button {
+  min-width: 0;
   max-width: 260px;
   overflow: hidden;
-  color: #81796d;
-  font-size: 11px;
-  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.folder-connection-action {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.folder-location-warning {
+  max-width: 260px;
+  color: #81796d;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .folder-connection-compact.has-issue {
@@ -3487,7 +3500,8 @@ body:has(.app-shell.workspace-page) {
     padding: 12px 16px;
   }
 
-  .folder-location-label {
+  .folder-location-button,
+  .folder-location-warning {
     max-width: 160px;
   }
 
@@ -4648,19 +4662,28 @@ body:has(.app-shell.workspace-page) {
 
 .site-head-right .folder-connection-compact {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-end;
   align-self: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 260px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
 }
 
-.site-head-right .folder-location-label,
 .site-head-right .folder-location-issue {
   line-height: 1.25;
+}
+
+.site-head-right .folder-connection-compact .folder-location-button {
+  max-width: 260px;
+}
+
+.site-head-right .folder-connection-compact .folder-location-warning {
+  max-width: 260px;
 }
 
 .site-head-right .folder-connection-compact.has-issue {
@@ -4668,7 +4691,7 @@ body:has(.app-shell.workspace-page) {
 }
 
 .site-head-right .folder-connection-compact .btn {
-  align-self: center;
+  align-self: flex-end;
   padding: 7px 12px;
   font-size: 11px;
 }
@@ -5025,6 +5048,11 @@ body:has(.app-shell.workspace-page) {
 
   .site-head-right .folder-connection-compact .btn {
     padding: 6px 8px;
+  }
+
+  .site-head-right .folder-connection-compact .folder-location-button,
+  .site-head-right .folder-connection-compact .folder-location-warning {
+    max-width: 160px;
   }
 
   .global-nav {
