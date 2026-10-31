@@ -3845,7 +3845,7 @@ function supportWidgetHTML() {
           <h2 id="supportTitle">${L('ESPER가 도움이 되었나요?', 'Is ESPER helping you?')}</h2>
           <p></p>
           <img class="support-qr" src="${SUPPORT_QR_SRC[language]}" alt="${L('자발적 후원을 위한 QR 코드', 'QR code for voluntary support')}" />
-          <p id="supportDescription">${L('후원하신 금액은 전액 개발자의 식비와 AI구독비로 탕진됩니다.', 'Every donation goes directly toward keeping the developer fed and their AI subscriptions running.')}</p>
+          <p id="supportDescription">${L('후원하신 금액은 전액 개발자의 식비와 Copilot 구독비로 탕진됩니다.', 'Every donation goes directly toward keeping the developer fed and his Copilot running.')}</p>
         </div>
       </dialog>
     </div>`;
