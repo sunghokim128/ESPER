@@ -1,5 +1,7 @@
 # ESPER — Excel-based Spaced-repetition Program for Efficient Retention
 
+Anki is extremely effective, but many people give up on it because it is hard to learn. ESPER was made for them: **ESPER is basically Anki made easy.** You can import an Anki `.apkg` file directly and ESPER converts it automatically.
+
 ESPER is a static web app (GitHub Pages) for studying any set of information organized as key, value, and hint. Use the flashcard-based **Study page** for active recall or open the printable **A4 view** to review a whole set at a glance. FSRS manages card state and review scheduling locally in the browser.
 
 On first launch, choose **한국어 사용자** or **English user**. Change the language at any time from the settings menu. Language changes the interface, tutorial, AI prompt, and support QR only; it does not change workbook contents or study progress.
