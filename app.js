@@ -42,10 +42,8 @@ import {
 import {
   deleteProjectRecord,
   createProjectDirectory,
-  dismissSampleCartridge,
   getProject,
   getProjectOrder,
-  getSampleCartridgeDismissed,
   getLanguage,
   getStudySettings,
   saveLanguage,
@@ -117,11 +115,6 @@ let language = 'en';
 const isEnglish = () => language === 'en';
 const L = (ko, en) => (language === 'en' ? en : ko);
 const studyActionLabel = ([action, ko]) => L(ko, STUDY_ACTION_LABELS_EN[action]);
-const SAMPLE_FILE_NAMES = { ko: '영단어와 FSRS-7 예시.xlsx', en: 'Vocabulary and FSRS-7 Starter.xlsx' };
-const SAMPLE_FILE_URLS = {
-  ko: './assets/tutorial/vocabulary-fsrs-7-starter-ko.espr',
-  en: './assets/tutorial/vocabulary-fsrs-7-starter-en.espr',
-};
 const PROMPT_FILE_URLS = {
   ko: './assets/guide/downloads/word-list-generation-prompt.md',
   en: './assets/guide/downloads/word-list-generation-prompt-en.md',
@@ -308,14 +301,12 @@ const state = {
   a4Title: null,
   a4Info: null,
   busy: false,
-  sampleLoading: false,
   processingMessage: '',
   error: '',
   notice: '',
   directoryAccessIssue: '',
   generationPrompt: '',
   generationPromptError: '',
-  sampleCartridgeDismissed: { ko: false, en: false },
   projectOrder: [],
   editRows: [],
   editDirty: false,
@@ -347,7 +338,6 @@ const processingProjectIds = new Set();
 window.addEventListener('beforeunload', (event) => {
   const hasPendingWork =
     state.busy ||
-    state.sampleLoading ||
     Boolean(state.processingMessage) ||
     Boolean(state.anki?.busy) ||
     processingProjectIds.size > 0 ||
@@ -839,10 +829,6 @@ async function load() {
       ...state.projects.filter((project) => !savedProjectOrder.includes(project.id)),
     ];
     state.projectOrder = state.projects.map((project) => project.id);
-    state.sampleCartridgeDismissed = {
-      ko: await getSampleCartridgeDismissed('ko'),
-      en: await getSampleCartridgeDismissed('en'),
-    };
     const savedLanguage = await getLanguage();
     if (savedLanguage) setLanguageValue(savedLanguage);
     else state.languageChoicePending = true;
@@ -914,6 +900,24 @@ async function handleFile(file) {
   if (/\.apkg$/i.test(file.name)) return startAnkiImport(file);
   if (/\.espr$/i.test(file.name)) return importEsprFile(file);
   return importWorkbookFile(file);
+}
+
+const TUTORIAL_DECK_FILES = {
+  ko: '튜토리얼 영단어 엑.xlsx',
+  en: 'Tutorial Vocab Deck.xlsx',
+};
+
+async function startTutorialDeck() {
+  const fileName = TUTORIAL_DECK_FILES[isEnglish() ? 'en' : 'ko'];
+  try {
+    const response = await fetch(`assets/tutorial/${encodeURIComponent(fileName)}`);
+    if (!response.ok) throw new Error(String(response.status));
+    const blob = await response.blob();
+    await importWorkbookFile(new File([blob], fileName, { type: blob.type }));
+  } catch {
+    state.error = L('튜토리얼 덱을 불러오지 못했어요.', 'Could not load the tutorial deck.');
+    render();
+  }
 }
 
 async function importEsprFile(file) {
@@ -1535,58 +1539,6 @@ async function connectWorkbookDirectory() {
   }
 }
 
-async function startSampleProject(destination = 'study') {
-  if (state.busy) return;
-  state.error = '';
-  state.notice = '';
-
-  const sampleFileName = SAMPLE_FILE_NAMES[language];
-  const existingSample = state.projects.find((project) => project.sourceName === sampleFileName);
-  if (existingSample) {
-    await openProject(existingSample.id, destination);
-    return;
-  }
-
-  if (!state.directoryConnected) {
-    if (state.directoryHandle) {
-      if (!(await ensureWorkbookDirectoryAccess())) {
-        return;
-      }
-    } else {
-      await connectWorkbookDirectory();
-      if (!state.directoryConnected) {
-        return;
-      }
-    }
-  }
-
-  state.sampleLoading = true;
-  state.processingMessage = L('샘플 학습 목록을 준비하는 중…', 'Preparing the sample study set…');
-  render();
-  try {
-    const response = await fetch(new URL(SAMPLE_FILE_URLS[language], import.meta.url));
-    if (!response.ok) {
-      throw new Error(L(`샘플 파일을 불러오지 못했어요. (${response.status})`, `Could not load the sample file. (${response.status})`));
-    }
-    const sampleFile = new File(
-      [await response.blob()],
-      sampleFileName.replace(/\.xlsx$/i, '.espr'),
-      { type: 'application/x-espr' }
-    );
-    await handleFile(sampleFile);
-    if (state.project && state.sourceName === sampleFileName) {
-      await routeToProjectDestination(destination);
-    }
-  } catch (error) {
-    state.error = `${L('샘플 학습 목록을 준비하지 못했어요', 'Could not prepare the sample study set')}: ${error instanceof Error ? error.message : String(error)}`;
-    render();
-  } finally {
-    state.sampleLoading = false;
-    state.processingMessage = '';
-    render();
-  }
-}
-
 async function ensureWorkbookDirectoryAccess() {
   try {
     const directory = state.directoryHandle;
@@ -1705,14 +1657,93 @@ async function editProject(id) {
   render();
 }
 
-function leaveEditPage() {
+async function createBlankProject() {
+  if (state.busy) return;
+  state.error = '';
+  state.notice = '';
+  if (!state.directoryConnected) {
+    const allowed = await ensureWorkbookDirectoryAccess();
+    if (!allowed) return;
+  }
+  const input = window.prompt(L('새 프로젝트 이름을 입력해 주세요.', 'Enter a name for the new project.'));
+  const name = input?.trim();
+  if (!name) return;
+  if (projectNameExists(state.projects.map((project) => project.name), name)) {
+    state.error = L(`"${name}" 이름의 프로젝트가 이미 있어요. 다른 이름을 사용해 주세요.`, `A project named "${name}" already exists. Please use a different name.`);
+    render();
+    return;
+  }
+  state.busy = true;
+  state.processingMessage = L('새 프로젝트를 만드는 중…', 'Creating the project…');
+  render();
+  let created = null;
+  try {
+    const fileName = `${name}.xlsx`;
+    const workbook = await createStudyWorkbook([['', '', '']], ['key', 'value', 'hint']);
+    const file = new File([workbook], fileName, { type: workbook.type });
+    const project = {
+      id: crypto.randomUUID(),
+      name,
+      fileName,
+      sourceName: fileName,
+      createdAt: Date.now(),
+      pairs: [],
+      title: name,
+      a4Title: null,
+      a4Info: null,
+      formatVersion: 12,
+      cartridgeColorIndex: state.projects.length % 4,
+    };
+    await createProjectDirectory(project.name);
+    try {
+      await writeProjectWorkbook(project.name, project.fileName, file);
+      const synchronized = await synchronizeFsrsProject(project, []);
+      project.pairs = synchronized.pairs;
+      await saveProject(project);
+    } catch (error) {
+      await removeProjectDirectory(project.name).catch(() => {});
+      throw error;
+    }
+    created = project;
+    state.projects = [project, ...state.projects];
+    state.projectOrder = state.projects.map((item) => item.id);
+    await saveProjectOrder(state.projectOrder).catch(() => {});
+  } catch (error) {
+    state.error = `${L('프로젝트를 만들지 못했어요', 'Could not create the project')}: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    state.busy = false;
+    state.processingMessage = '';
+  }
+  render();
+  if (created) await editProject(created.id);
+}
+
+async function discardEmptyProject(project) {
+  try {
+    await removeProjectDirectory(project.name);
+    releaseProjectImages(project.name);
+    await deleteProjectRecord(project.id);
+    state.projects = state.projects.filter((item) => item.id !== project.id);
+    state.projectOrder = state.projects.map((item) => item.id);
+    await saveProjectOrder(state.projectOrder).catch(() => {});
+  } catch {
+    // The empty project stays in the list if cleanup fails; the user can delete it manually.
+  }
+}
+
+async function leaveEditPage() {
   if (state.editDirty && !window.confirm(L('저장하지 않은 변경 사항이 있어요. 나가시겠어요?', 'You have unsaved changes. Leave anyway?'))) return;
+  const leaving = state.project;
   state.page = 'workspace';
   state.project = null;
   state.sourceFile = null;
   state.editRows = [];
   state.editDirty = false;
   render();
+  if (leaving && !leaving.pairs.length) {
+    await discardEmptyProject(leaving);
+    render();
+  }
 }
 
 async function saveEditedProject() {
@@ -1797,7 +1828,7 @@ function editImageElement(id) {
   wrapper.className = 'edit-img';
   wrapper.contentEditable = 'false';
   wrapper.dataset.imgId = id;
-  wrapper.innerHTML = `${renderImageText(imageTag(id), esc)}<span class="edit-img-tools"><button type="button" data-edit-img="crop">${L('자르기', 'Crop')}</button><button type="button" data-edit-img="replace">${L('교체', 'Replace')}</button><button type="button" data-edit-img="delete">${L('삭제', 'Delete')}</button></span>`;
+  wrapper.innerHTML = `${renderImageText(imageTag(id), esc)}<span class="edit-img-tools" role="toolbar" aria-label="${L('이미지 편집', 'Edit image')}"><button type="button" data-edit-img="crop" title="${L('자르기', 'Crop')}" aria-label="${L('자르기', 'Crop')}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.5v10a1 1 0 0 0 1 1h9.5M1.5 4H11a1 1 0 0 1 1 1v9.5"/></svg></button><button type="button" data-edit-img="replace" title="${L('교체', 'Replace')}" aria-label="${L('교체', 'Replace')}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5a5.5 5.5 0 0 1 9.6-2.4l1.4 1.6M13.5 2v3.7h-3.7M13.5 9.5a5.5 5.5 0 0 1-9.6 2.4l-1.4-1.6M2.5 14v-3.7h3.7"/></svg></button><button type="button" class="is-danger" data-edit-img="delete" title="${L('삭제', 'Delete')}" aria-label="${L('삭제', 'Delete')}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4M6.7 7v4M9.3 7v4"/></svg></button></span>`;
   return wrapper;
 }
 
@@ -2249,6 +2280,7 @@ function editHTML() {
     ${headerHTML()}
     <main class="shell edit-screen">
       <div class="edit-toolbar">
+        <button type="button" class="btn edit-back" data-edit-back>${L('← 뒤로', '← Back')}</button>
         <h1 class="edit-title">${esc(state.project?.name || '')} <span>${L('편집', 'Edit')}</span></h1>
         <div class="edit-toolbar-actions">
           <span class="edit-status${state.editMessageIsError ? ' is-error' : ''}" role="status">${esc(state.editMessage)}</span>
@@ -2304,11 +2336,6 @@ async function deleteProject(id) {
   try {
     await removeProjectDirectory(project.name);
     releaseProjectImages(project.name);
-    const sampleLanguage = Object.keys(SAMPLE_FILE_NAMES).find((key) => SAMPLE_FILE_NAMES[key] === project.sourceName);
-    if (sampleLanguage) {
-      await dismissSampleCartridge(sampleLanguage);
-      state.sampleCartridgeDismissed[sampleLanguage] = true;
-    }
     await deleteProjectRecord(project.id);
     state.projects = state.projects.filter((item) => item.id !== id);
     state.projectOrder = state.projects.map((item) => item.id);
@@ -2574,7 +2601,9 @@ function formatGuideHTML() {
               ${state.generationPrompt
                 ? `<a class="guide-chatgpt-link" href="${esc(chatGptPromptUrl())}" target="_blank" rel="noopener noreferrer">${L('AI로 단어장 엑셀파일 생성', 'Create a vocabulary spreadsheet with AI')}</a>`
                 : `<button type="button" class="guide-chatgpt-link" disabled title="${esc(state.generationPromptError || L('프롬프트를 불러오는 중이에요.', 'Loading the prompt…'))}">${state.generationPromptError ? L('바로가기를 준비하지 못했어요', 'Could not prepare the link') : L('프롬프트 불러오는 중…', 'Loading the prompt…')}</button>`}
-              <a class="anki-shared-decks-link" href="https://ankiweb.net/shared/decks" target="_blank" rel="noopener noreferrer">${L('Anki Shared Deck 둘러보기', 'Browse Anki Shared Decks')}<span aria-hidden="true">↗</span></a>
+              <a class="anki-shared-decks-link" href="https://ankiweb.net/shared/decks" target="_blank" rel="noopener noreferrer"><svg class="anki-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8l2.6 6.2 6.7.6-5.1 4.4 1.6 6.6L12 16l-5.8 3.6 1.6-6.6L2.7 8.6l6.7-.6z"/></svg>${L('Anki Shared Deck 둘러보기', 'Browse Anki Shared Decks')}</a>
+              <button type="button" class="guide-tutorial-deck-link" data-start-tutorial-deck>${L('튜토리얼 덱 체험', 'Try the tutorial deck')}</button>
+              <button type="button" class="guide-create-blank-link" data-create-blank-project>${L('직접 만들기', 'Create from scratch')}</button>
             </div>
           </section>
         </div>
@@ -2664,35 +2693,6 @@ function workspaceHTML() {
       </article>`;
   }).join('');
 
-  const hasSampleProject = state.projects.some((project) => project.sourceName === SAMPLE_FILE_NAMES[language]);
-  const sampleTitle = L('영단어·FSRS-7 예시 5개', 'Vocabulary + FSRS-7 · 5 Cards');
-  const sampleCartridge = hasSampleProject || state.sampleCartridgeDismissed[language]
-    ? ''
-    : `
-      <article class="project-card sample-project-card" style="--c:#5a9a7a">
-        <button type="button" class="project-open" data-start-sample aria-label="${L('이미지 힌트가 있는 영단어·FSRS-7 예시 5개 학습하기', 'Study the 5-card vocabulary and FSRS-7 sample with image hints')}"${state.busy ? ' disabled' : ''}>
-          <span class="cartridge-stage" aria-hidden="true">
-            <span class="cartridge">
-              <span class="cartridge-shell">
-                <span class="cartridge-ridge"></span>
-                <span class="cartridge-label">
-                  <span class="cartridge-label-head"><span>ESPER SAMPLE</span><b>.ESPR</b></span>
-                  <span class="cartridge-title">${sampleTitle}</span>
-                  <span class="cartridge-label-foot"><span>5 ITEMS · IMAGES</span><span>▶ PLAY</span></span>
-                </span>
-              </span>
-              <span class="cartridge-pins"></span>
-            </span>
-            <span class="console-lip"></span>
-          </span>
-          <span class="project-info">
-            <strong class="project-name">${sampleTitle}</strong>
-            <span class="project-meta">${state.busy ? L('샘플 학습 목록을 준비하고 있어요…', 'Preparing the sample study set…') : L('영단어와 FSRS-7 · 이미지 힌트 5개', 'Vocabulary and FSRS-7 · 5 image hints')}</span>
-            <span class="sample-cartridge-hint">${L('카트리지를 눌러 바로 학습을 시작하세요', 'Click the cartridge to start studying right away')}</span>
-          </span>
-        </button>
-      </article>`;
-
   return `
     ${headerHTML()}
     <main class="shell workspace-screen">
@@ -2714,7 +2714,6 @@ function workspaceHTML() {
       </div>
       <section class="project-list" aria-label="${L('엑셀 카트리지 목록', 'Excel cartridges')}">
         ${projectCards}
-        ${sampleCartridge}
         <button type="button" class="cartridge-slot" data-add-project aria-label="${L('규격에 맞는 엑셀, Anki .apkg, ESPER .espr 파일 선택', 'Choose a formatted Excel, Anki .apkg or ESPER .espr file')}">
           <span class="cartridge-slot-ghost" aria-hidden="true">＋</span>
           <strong>${L('규격에 맞는 엑셀, Anki .apkg, ESPER .espr 파일을 업로드하세요', 'Upload a formatted Excel, Anki .apkg or ESPER .espr file')}</strong>
@@ -3795,7 +3794,7 @@ function processingIndicatorMessage() {
           ? L('프로젝트 처리 중…', 'Processing project…')
           : state.studyRecordsLoading
             ? L('학습 기록을 불러오는 중…', 'Loading study records…')
-            : state.busy || state.sampleLoading
+            : state.busy
               ? L('처리 중…', 'Processing…')
               : '');
 }
@@ -4817,6 +4816,7 @@ function attach() {
 
   if (state.page === 'edit') {
     document.getElementById('homeBtn')?.addEventListener('click', leaveEditPage);
+    appEl.querySelector('[data-edit-back]')?.addEventListener('click', leaveEditPage);
     const cells = [...appEl.querySelectorAll('[data-edit-row]')];
     const saveButton = appEl.querySelector('[data-edit-save]');
     cells.forEach(attachEditCell);
@@ -5030,8 +5030,6 @@ function attach() {
 
   const connectFolderBtn = document.getElementById('connectFolderBtn');
   if (connectFolderBtn) connectFolderBtn.addEventListener('click', connectWorkbookDirectory);
-  const sampleProjectButton = appEl.querySelector('[data-start-sample]');
-  sampleProjectButton?.addEventListener('click', () => startSampleProject());
   const formatGuideModal = document.getElementById('formatGuideModal');
   if (formatGuideModal) {
     const openButton = appEl.querySelector('[data-open-format-guide]');
@@ -5042,6 +5040,14 @@ function attach() {
     openButton?.addEventListener('click', () => {
       formatGuideModal.hidden = false;
       formatGuideModal.querySelector('.format-guide-close').focus();
+    });
+    formatGuideModal.querySelector('[data-create-blank-project]')?.addEventListener('click', () => {
+      formatGuideModal.hidden = true;
+      createBlankProject();
+    });
+    formatGuideModal.querySelector('[data-start-tutorial-deck]')?.addEventListener('click', () => {
+      formatGuideModal.hidden = true;
+      startTutorialDeck();
     });
     formatGuideModal.querySelectorAll('[data-close-format-guide]').forEach((el) => {
       el.addEventListener('click', closeGuide);

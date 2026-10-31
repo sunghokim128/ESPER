@@ -409,6 +409,54 @@ body:has(.app-shell.workspace-page) {
   display: none;
 }
 
+.guide-tutorial-deck-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 13px;
+  border: 1px solid #d8c9b6;
+  border-radius: 10px;
+  background: #fffefa;
+  color: #6f452f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+
+.guide-tutorial-deck-link:hover,
+.guide-tutorial-deck-link:focus-visible {
+  border-color: #b5573a;
+  background: #f8efe4;
+}
+
+.guide-create-blank-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 8px 13px;
+  border: 1px solid #8f5a3c;
+  border-radius: 10px;
+  background: #8f5a3c;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+
+.guide-create-blank-link:hover,
+.guide-create-blank-link:focus-visible {
+  border-color: #6f452f;
+  background: #6f452f;
+  color: #fff;
+}
+
 .anki-shared-decks-link {
   display: inline-flex;
   min-height: 38px;
@@ -416,10 +464,10 @@ body:has(.app-shell.workspace-page) {
   justify-content: center;
   gap: 8px;
   padding: 8px 13px;
-  border: 1px solid #d8c9b6;
+  border: 1px solid #2f6fc4;
   border-radius: 10px;
-  background: #fffefa;
-  color: #6f452f;
+  background: #3a82e0;
+  color: #fff;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
@@ -429,13 +477,15 @@ body:has(.app-shell.workspace-page) {
 
 .anki-shared-decks-link:hover,
 .anki-shared-decks-link:focus-visible {
-  border-color: #b5573a;
-  background: #f8efe4;
-  color: #8f3f26;
+  border-color: #245aa3;
+  background: #2f6fc4;
+  color: #fff;
 }
 
-.anki-shared-decks-link span {
-  font-size: 14px;
+.anki-shared-decks-link .anki-star {
+  width: 16px;
+  height: 16px;
+  fill: #fff;
 }
 
 .workspace-guide-resource h2 {
@@ -1853,18 +1903,6 @@ body:has(.app-shell.workspace-page) {
 .project-exam-readiness[data-recall-level="high"] .project-exam-meter span { background: #2f9e62; }
 .project-exam-readiness[data-recall-level="mid"] .project-exam-meter span { background: #e08a1e; }
 .project-exam-readiness[data-recall-level="low"] .project-exam-meter span { background: #d1493f; }
-
-.sample-project-card .project-open:disabled {
-  cursor: progress;
-  opacity: 0.65;
-}
-
-.sample-cartridge-hint {
-  margin-top: 4px;
-  color: #8f3f26;
-  font-size: 12px;
-  font-weight: 600;
-}
 
 .cartridge-slot {
   display: flex;
@@ -3766,19 +3804,24 @@ body:has(.app-shell.workspace-page) {
 
 .edit-row-delete {
   position: absolute;
-  top: 4px;
-  right: 3px;
+  inset: 0;
   display: none;
-  width: 18px;
-  height: 18px;
+  width: 100%;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: #b3261e;
-  color: #fff;
+  background: #efeee9;
+  color: #8a8174;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 18px;
+  line-height: 1;
+  transition: background .15s, color .15s;
+}
+
+.edit-row-delete:hover,
+.edit-row-delete:focus-visible {
+  background: #fbe9e7;
+  color: #b3261e;
+  outline: none;
 }
 
 .edit-sheet tr:hover .edit-row-delete,
@@ -3836,26 +3879,58 @@ body:has(.app-shell.workspace-page) {
 
 .edit-img-tools {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  display: none;
-  gap: 4px;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(34, 28, 22, 0.86);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity .15s, transform .15s;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .edit-img:hover .edit-img-tools,
 .edit-img:focus-within .edit-img-tools {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
 }
 
 .edit-img-tools button {
-  padding: 2px 7px;
-  border: 1px solid #d8d1c4;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #30281f;
-  font: inherit;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
   cursor: pointer;
+  transition: background .15s;
+}
+
+.edit-img-tools button:hover,
+.edit-img-tools button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  outline: none;
+}
+
+.edit-img-tools button.is-danger:hover,
+.edit-img-tools button.is-danger:focus-visible {
+  background: #c8372d;
+}
+
+.edit-back {
+  flex: none;
 }
 
 .cell-img {
@@ -5179,6 +5254,7 @@ body:has(.app-shell.workspace-page) {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 0;
+  width: 100%;
 }
 
 .learning-status-card-head {

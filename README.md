@@ -13,7 +13,7 @@ Open https://sunghokim128.github.io/ESPER/ in a Chromium-based browser (Chrome o
 ## Getting started
 
 1. Choose a language when prompted. The format guide is available in Korean and English.
-2. Select the sample cartridge or add an Excel, CSV, TXT, TSV, Anki `.apkg`, or ESPER `.espr` file. The tutorial sample has image hints for **Eat**, **Adversity**, **Truculent**, **FSRS-7 algorithm**, and **Retention**; its definitions follow the selected language. Opening a cartridge takes you directly to its Study page.
+2. Add an Excel, CSV, TXT, TSV, Anki `.apkg`, or ESPER `.espr` file. Opening a cartridge takes you directly to its Study page.
 3. On the Study page, try to recall the value for each key. Flip the card to reveal the value, then open its hint if needed. Rate your recall **Again**, **Hard**, **Good**, or **Easy**.
 4. Use the header to switch between **Study**, **A4 view**, **Learning status** (a compact key-card overview whose opacity reflects estimated recall; select a card for its value, hint, recall probability, and FSRS details), and **Progress** (session records). Open **Menu** for language and study settings, keyboard shortcuts, PDF export, and a link to the home page.
 5. In A4 view, click a key to reveal or hide its hint. Choose **Learning priority** to put reviewed cards first from lowest estimated recall to highest, then start unreviewed cards on a separate section/page. Adjust image size and other display settings in the grouped settings panel. Use the **← Study page** button to return to the current Study session.
@@ -34,7 +34,7 @@ The first row is a header and is skipped. Data starts in row 2:
 
 The key, value, and hint can represent any topic. For example, a vocabulary workbook can use an English word as the key, a Korean meaning or English definition as the value, and an English sentence as the hint. A medical-concept workbook can use a term as the key, its definition as the value, and a memory cue or clinical scenario as the hint. Enter line breaks in a hint cell when you want multiple lines displayed.
 
-The downloadable Korean and English sample workbooks each contain 100 items and follow this same three-column format. Exam dates use an in-app calendar localized to the selected language. The tutorial's FSRS-7 hint uses a general spaced-repetition diagram, not a diagram of the FSRS-7 algorithm itself. Image sources and licenses are listed in `assets/tutorial/IMAGE-CREDITS.md` and inside both `.espr` files. The AI generation prompts are available in the format guide; they create three-column workbooks and do not generate example translations.
+Exam dates use an in-app calendar localized to the selected language. The AI generation prompts are available in the format guide; they create three-column workbooks and do not generate example translations.
 
 ## Saving and records
 
@@ -69,10 +69,7 @@ The project folder name is the uploaded workbook filename without its extension.
 | `index.html` | App document |
 | `app.css` | Interface, Study cards, A4 view, and print styles |
 | `app.js` | Language, project, navigation, Study, and A4 view behavior |
-| `assets/guide/downloads/` | Bilingual AI prompts and 100-item sample workbooks |
-| `assets/tutorial/vocabulary-fsrs-7-starter-ko.espr` | Korean tutorial sample with five vocabulary/FSRS-7 cards and bundled image hints |
-| `assets/tutorial/vocabulary-fsrs-7-starter-en.espr` | English tutorial sample with five vocabulary/FSRS-7 cards and bundled image hints |
-| `assets/tutorial/IMAGE-CREDITS.md` | Sources and licenses for tutorial sample hint images |
+| `assets/guide/downloads/` | Bilingual AI prompts |
 | `lib/projectStore.js` | IndexedDB settings and project files in the connected save folder |
 | `lib/parseSheet.js` | Workbook parsing, editing, and export |
 | `lib/fsrs.js` | FSRS-7 scheduling, card synchronization, and JSON validation |
