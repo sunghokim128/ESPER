@@ -79,4 +79,4 @@ The project folder name is the uploaded workbook filename without its extension.
 
 ## Acknowledgements
 
-ESPER's scheduling uses the open-source FSRS (Free Spaced Repetition Scheduler) algorithm and its TypeScript implementation, [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs), developed by the [open-spaced-repetition](https://github.com/open-spaced-repetition) community. The bundled copy and its license are in `vendor/ts-fsrs/`.
+ESPER's review scheduling is built on [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) (v6.0.0), the TypeScript implementation of the FSRS (Free Spaced Repetition Scheduler) algorithm by [Open Spaced Repetition](https://github.com/open-spaced-repetition). The official browser (UMD) build is bundled unmodified in `vendor/ts-fsrs/` and runs entirely on-device, scheduling cards with FSRS-7 (`DefaultScheduler`). `ts-fsrs` is distributed under the MIT License; its copyright notice and license text are kept in `vendor/ts-fsrs/LICENSE`.
