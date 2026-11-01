@@ -8,7 +8,7 @@ On first launch, choose **한국어 사용자** or **English user**. Change the 
 
 ## Introduction video
 
-[![Watch the ESPER introduction video](https://img.youtube.com/vi/J7beSHbJy94/hqdefault.jpg)](https://www.youtube.com/watch?v=J7beSHbJy94&t=5s)
+[![Watch the ESPER introduction video](https://img.youtube.com/vi/J7beSHbJy94/hqdefault.jpg)](https://www.youtube.com/watch?v=J7beSHbJy94&t=1s)
 
 ## Usage
 
