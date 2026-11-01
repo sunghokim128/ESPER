@@ -4,18 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ESPER 소개</title>
-    <link rel="stylesheet" href="landing.css" />
+    <link rel="stylesheet" href="landing.css?v=6" />
   </head>
   <body>
     <button type="button" class="lang" data-lang-toggle aria-label="언어">English</button>
 
     <main>
-      <h1>ESPER</h1>
-      <p class="intro" data-i18n="intro">엑셀이나 Anki 덱을 간편하게 플래시카드로 바꾸고, 나만의 속도로 학습해 보세요.</p>
+      <h1 data-i18n="headline">ESPER, 대량 암기를 위한 최고의 선택</h1>
+      <p class="intro" data-i18n="intro">무엇을 외울지만 정하세요. 최적의 복습 주기는 ESPER가 알아서 설정해 드립니다.</p>
 
       <div class="video">
         <iframe
-          src="https://www.youtube-nocookie.com/embed/J7beSHbJy94?autoplay=1&mute=1&start=1&cc_load_policy=1&cc_lang_pref=ko&playsinline=1&rel=0"
+          data-video
           title="ESPER 소개 영상"
           allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowfullscreen
@@ -28,14 +28,18 @@
     <script>
       const T = {
         en: {
-          intro: 'Turn an Excel sheet or Anki deck into flashcards and start learning at your own pace.',
+          headline: 'ESPER, the best choice for memorizing at scale',
+          intro: 'Just decide what to memorize. ESPER sets the optimal review schedule for you.',
           start: 'Start studying',
           toggle: '한국어',
+          videoTitle: 'ESPER introduction video',
         },
         ko: {
-          intro: '엑셀이나 Anki 덱을 간편하게 플래시카드로 바꾸고, 나만의 속도로 학습해 보세요.',
+          headline: 'ESPER, 대량 암기를 위한 최고의 선택',
+          intro: '무엇을 외울지만 정하세요. 최적의 복습 주기는 ESPER가 알아서 설정해 드립니다.',
           start: '학습하러 가기',
           toggle: 'English',
+          videoTitle: 'ESPER 소개 영상',
         },
       };
       let lang = localStorage.getItem('esper-landing-lang')
@@ -44,6 +48,10 @@
         document.documentElement.lang = lang;
         document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = T[lang][el.dataset.i18n]; });
         document.querySelector('[data-lang-toggle]').textContent = T[lang].toggle;
+        const src = `https://www.youtube-nocookie.com/embed/J7beSHbJy94?autoplay=1&mute=1&start=1&cc_load_policy=1&cc_lang_pref=${lang}&hl=${lang}&playsinline=1&rel=0`;
+        const video = document.querySelector('[data-video]');
+        if (video.getAttribute('src') !== src) video.setAttribute('src', src);
+        video.title = T[lang].videoTitle;
       }
       document.querySelector('[data-lang-toggle]').addEventListener('click', () => {
         lang = lang === 'ko' ? 'en' : 'ko';

@@ -868,6 +868,8 @@ function setLanguageValue(value) {
   state.language = language;
   document.documentElement.lang = language;
   document.title = 'ESPER';
+  // 튜토리얼 페이지가 같은 언어로 영상 자막을 설정할 수 있도록 공유합니다.
+  try { localStorage.setItem('esper-landing-lang', language); } catch { /* 저장소 접근 불가 시 무시 */ }
 }
 
 // 언어 설정만 바꿉니다. 프로젝트, 엑셀 파일, FSRS 기록은 건드리지 않습니다.
