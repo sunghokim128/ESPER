@@ -9,7 +9,7 @@ import {
 } from './lib/parseSheet.js';
 import { normalizeColumnWidths, resizeAdjacentColumns } from './lib/columnSizing.js';
 import { indexStudyPairs } from './lib/studyPairs.js';
-import { AnkiImportError, buildAnkiRows, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js';
+import { AnkiImportError, buildAnkiRows, audioOnlyFields, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js?v=2';
 import { configureImageDirectory, getImageBlob, getImageUrl, hydrateImages, processImage, releaseProjectImages, saveImageBlob, saveImageFile } from './lib/imageStore.js';
 import { createEsprBlob, readEsprFile, ESPR_EXTENSION } from './lib/projectShare.js';
 import { attachDatePicker, calendarMonthDays, isDatePickerEvent, localDateValue, parseLocalDate } from './lib/datePicker.js';
@@ -484,7 +484,7 @@ function currentStudySide() {
 
 const STUDY_FONT_RANGE = { front: { min: 18, max: 120 }, back: { min: 16, max: 72 } };
 
-function cardSizeControlsHTML(side, attr) {
+function cardSizeControlsHTML(side, attr, hasImage = true) {
   const settings = state.studySettings;
   const font = STUDY_FONT_RANGE[side];
   const sideLabel = side === 'front' ? L('앞면', 'Front') : L('뒷면', 'Back');
@@ -494,9 +494,9 @@ function cardSizeControlsHTML(side, attr) {
       <input type="range" min="${font.min}" max="${font.max}" step="1" data-${attr}-font value="${settings.fontSizes[side]}" aria-label="${sideLabel} ${L('글자 크기', 'text size')}">
       <output>${settings.fontSizes[side]}px</output>
     </label>
-    <label class="study-font-setting">
+    <label class="study-font-setting${hasImage ? '' : ' is-disabled'}"${hasImage ? '' : ` title="${L('이 면에는 이미지가 없어요', 'No image on this side')}"`}>
       <span>${L('이미지', 'Image')}</span>
-      <input type="range" min="${STUDY_IMAGE_HEIGHT_RANGE.min}" max="${STUDY_IMAGE_HEIGHT_RANGE.max}" step="1" data-${attr}-image value="${settings.imageHeights[side]}" aria-label="${sideLabel} ${L('이미지 크기', 'image size')}">
+      <input type="range" min="${STUDY_IMAGE_HEIGHT_RANGE.min}" max="${STUDY_IMAGE_HEIGHT_RANGE.max}" step="1"${hasImage ? '' : ' disabled'} data-${attr}-image value="${settings.imageHeights[side]}" aria-label="${sideLabel} ${L('이미지 크기', 'image size')}">
       <output>${settings.imageHeights[side]}</output>
     </label>`;
 }
@@ -1152,11 +1152,13 @@ function defaultAnkiMapping(deck, noteTypeId) {
   const noteType = deck.noteTypes.find((type) => type.id === noteTypeId);
   const fieldCount = noteType.fields.length;
   const imageStats = countFieldImages(deck, noteTypeId);
-  const imageFields = imageStats.map((stat, index) => (stat.found && index >= 2 ? index : -1)).filter((index) => index >= 0);
+  const audio = audioOnlyFields(deck, noteTypeId);
+  const usable = Array.from({ length: fieldCount }, (_, index) => index).filter((index) => !audio[index]);
+  const imageFields = usable.slice(2).filter((index) => imageStats[index].found);
   return {
-    key: fieldCount > 0 ? [0] : [],
-    value: fieldCount > 1 ? [1] : [],
-    hint: imageFields.length ? imageFields : fieldCount > 2 ? [2] : [],
+    key: usable.length > 0 ? [usable[0]] : [],
+    value: usable.length > 1 ? [usable[1]] : [],
+    hint: imageFields.length ? imageFields : usable.length > 2 ? [usable[2]] : [],
   };
 }
 
@@ -1203,6 +1205,7 @@ function ankiImportHTML() {
   const anki = state.anki;
   const noteType = anki.deck.noteTypes.find((type) => type.id === anki.noteTypeId);
   const imageStats = countFieldImages(anki.deck, anki.noteTypeId);
+  const audioFields = audioOnlyFields(anki.deck, anki.noteTypeId);
   const preview = previewAnkiCards(anki.deck, anki.noteTypeId, anki.mapping, 'newline', anki.previewIndex);
   const areas = [
     ['key', 'Key', L('학습 카드 앞면', 'Front of the card')],
@@ -1238,10 +1241,17 @@ function ankiImportHTML() {
           ${hintButton(anki.previewHintOpen)}
         </div>`
     : `<p class="anki-preview-empty">${L('미리 볼 수 있는 카드가 없어요. Key와 Value 필드 배치를 확인해 주세요.', 'No cards to preview. Check the Key and Value field mapping.')}</p>`;
+  const ankiFaceHasImage = () => {
+    const hasImage = (parts) => (parts || []).some((part) => part.type === 'image');
+    const hint = preview.card?.hint;
+    return anki.previewFlipped
+      ? hasImage(backParts) || ((settings.showHintOnBack || anki.previewHintOpen) && hasImage(hint))
+      : hasImage(frontParts) || (anki.previewHintOpen && hasImage(hint));
+  };
   const previewSettings = `
     <aside class="anki-preview-settings" aria-label="${L('학습 카드 설정', 'Card settings')}">
       <h3>${anki.previewFlipped ? L('카드 크기 · 뒷면', 'Card size · Back') : L('카드 크기 · 앞면', 'Card size · Front')}</h3>
-      ${cardSizeControlsHTML(anki.previewFlipped ? 'back' : 'front', 'anki')}
+      ${cardSizeControlsHTML(anki.previewFlipped ? 'back' : 'front', 'anki', ankiFaceHasImage())}
       <label class="anki-mini-check"><input type="checkbox" data-anki-setting="showHintOnBack"${settings.showHintOnBack ? ' checked' : ''}> ${L('뒷면에 hint 기본 표시', 'Show hint on back')}</label>
       <label class="anki-mini-check"><input type="checkbox" data-anki-setting="swapKeyValue"${settings.swapKeyValue ? ' checked' : ''}> ${L('Key·Value 반전', 'Swap key and value')}</label>
       <p class="anki-mini-note">${L('지금 보고 있는 면의 모든 카드에 적용되고, 학습 화면에도 그대로 반영돼요.', 'Applies to this side of every card and carries over to study mode.')}</p>
@@ -1254,7 +1264,7 @@ function ankiImportHTML() {
     <div class="anki-overlay">
       <div class="anki-dialog" role="dialog" aria-modal="true" aria-labelledby="ankiTitle">
         <h2 id="ankiTitle">${L('Anki 덱 가져오기', 'Import Anki deck')}</h2>
-        <p class="anki-sub">${esc(anki.fileName)} · ${L('오디오는 가져오지 않아요.', 'Audio is not imported.')}</p>
+        <p class="anki-sub">${esc(anki.fileName)} · ${anki.deck.hasAudio ? `<span class="anki-audio-note">${L('이 덱에는 오디오가 포함되어 있어요. 아직 오디오 파일은 지원하지 않아 가져오지 않아요. 대신 학습 중 브라우저 내장 음성(TTS)이 key 값을 읽어 줘요.', 'This deck contains audio. Audio files are not supported yet, so they will not be imported. Instead, the browser’s built-in text-to-speech (TTS) reads the key aloud while you study.')}</span>` : L('오디오는 가져오지 않아요.', 'Audio is not imported.')}</p>
         <div class="anki-row">
           <label>${L('노트 타입', 'Note type')}
             <select data-anki-type${disabled}>
@@ -1269,7 +1279,7 @@ function ankiImportHTML() {
               <small>${description}</small>
               ${[
                 ...anki.mapping[area],
-                ...noteType.fields.map((_, index) => index).filter((index) => !anki.mapping[area].includes(index)),
+                ...noteType.fields.map((_, index) => index).filter((index) => !audioFields[index] && !anki.mapping[area].includes(index)),
               ].map((index) => {
                 const field = noteType.fields[index];
                 const position = anki.mapping[area].indexOf(index);
@@ -3090,13 +3100,24 @@ async function refreshExamSummary() {
   }
 }
 
+function studyFaceHasImage() {
+  const session = state.study;
+  const pair = session?.started ? studyCurrentPair() : null;
+  if (!pair) return true;
+  const shown = studyShownPair(pair);
+  const has = (text) => /\[img:/.test(String(text ?? ''));
+  return session.flipped
+    ? has(shown.value) || ((state.studySettings.showHintOnBack || session.showBackHint) && has(pair.hint))
+    : has(shown.key) || (session.hintOpen && has(pair.hint));
+}
+
 function studySettingsHTML() {
   const settings = state.studySettings;
   return `
     <div class="study-settings-panel" id="studySettingsPanel" aria-label="${L('학습 설정', 'Study Setting')}">
       <section class="study-setting-card">
         <h2>${currentStudySide() === 'front' ? L('카드 크기 · 앞면', 'Card size · Front') : L('카드 크기 · 뒷면', 'Card size · Back')}</h2>
-        ${cardSizeControlsHTML(currentStudySide(), 'study')}
+        ${cardSizeControlsHTML(currentStudySide(), 'study', studyFaceHasImage())}
         <p class="study-font-setting-note">${L('지금 보고 있는 면의 모든 카드에 적용돼요. 글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Applies to this side of every card. Long text shrinks to fit the card.')}</p>
       </section>
       <section class="study-setting-card">

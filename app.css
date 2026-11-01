@@ -6527,3 +6527,8 @@ html[data-img-a4="fill"] .a4-print-sheet .cell-img { max-height: 45mm; }
   opacity: 0.35;
   cursor: default;
 }
+
+.anki-audio-note { color: #9a5b1a; font-weight: 600; }
+
+.study-font-setting.is-disabled { opacity: 0.4; }
+.study-font-setting.is-disabled input { cursor: not-allowed; }
