@@ -5956,14 +5956,8 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
   object-fit: contain;
 }
 
-html[data-img-a4="small"] .a4-sheet .cell-img,
-html[data-img-a4="small"] .a4-print-sheet .cell-img { max-height: 8mm; }
-html[data-img-a4="medium"] .a4-sheet .cell-img,
-html[data-img-a4="medium"] .a4-print-sheet .cell-img { max-height: 14mm; }
-html[data-img-a4="large"] .a4-sheet .cell-img,
-html[data-img-a4="large"] .a4-print-sheet .cell-img { max-height: 24mm; }
-html[data-img-a4="fill"] .a4-sheet .cell-img,
-html[data-img-a4="fill"] .a4-print-sheet .cell-img { max-height: 45mm; }
+.a4-sheet .cell-img,
+.a4-print-sheet .cell-img { max-height: var(--a4-img-h, 14mm); }
 
 /* Image crop dialog */
 .crop-overlay {
@@ -6548,3 +6542,163 @@ html[data-img-a4="fill"] .a4-print-sheet .cell-img { max-height: 45mm; }
 .learning-status-heading { margin: 8px 0 18px; }
 .learning-status-footnote { margin: 4px 0 14px; font-size: 11.5px; }
 .learning-status-toolbar .image-size-control-status select { height: 42px; border-radius: 10px; }
+
+/* Learning Status 상세: 위는 학습 카드 뒷면, 아래는 FSRS 정보 */
+.learning-status-toolbar { grid-template-columns: minmax(200px, 1fr); }
+.learning-status-dialog { width: min(700px, calc(100vw - 32px)); }
+.learning-status-dialog-card { padding: 22px 24px 24px; }
+.learning-status-dialog-card > .learning-status-badge { margin-bottom: 12px; }
+.learning-status-back-wrap { container-type: inline-size; }
+.learning-status-back {
+  display: flex;
+  width: 100%;
+  aspect-ratio: 760 / 500;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4cqw;
+  overflow: auto;
+  border: 1px solid #e6ddd1;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #fffefa, #f8f2e9);
+  box-shadow: 0 10px 28px rgba(65, 48, 31, .09);
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.learning-status-back-value { line-height: 1.4; }
+.learning-status-back-hint { width: 100%; padding-top: 12px; border-top: 1px solid #e7e2d8; color: #62574c; line-height: 1.4; }
+.learning-status-back-value .cell-img,
+.learning-status-back-hint .cell-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(var(--study-img-h-back, 55) * 1.18cqw);
+  margin: 8px auto;
+  object-fit: contain;
+}
+.learning-status-nohint { color: #a0958a; }
+.learning-status-dialog-content { gap: 16px; }
+
+/* Learning Status 툴바: 검색은 작게, 필터는 오른쪽 */
+.learning-status-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.learning-status-toolbar .learning-status-search { flex: 0 1 260px; }
+.learning-status-toolbar .learning-status-filters {
+  grid-column: auto;
+  grid-row: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+/* A4 view settings: study 설정과 같은 compact 디바이더 스타일 */
+.a4-view-screen .a4-settings { position: relative; padding: 20px 14px 20px 20px; }
+.a4-view-screen .a4-settings-collapse {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 2;
+  width: 20px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #e2d6c5;
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: #fffefa;
+  color: #8a7a68;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+}
+.a4-view-screen .a4-settings-collapse:hover { background: #f4e7df; color: #6f452f; }
+.a4-view-screen .a4-settings-collapse svg { width: 16px; height: 16px; }
+.a4-view-screen .a4-settings-content { padding-right: 8px; }
+.a4-view-screen .a4-item-count strong { font-size: 30px; }
+.a4-view-screen .big-sub { font-size: 13px; }
+.a4-view-screen .a4-settings-content .selection-count-hint { margin: 4px 0 0; }
+.a4-view-screen .a4-settings-content .a4-settings-group {
+  gap: 6px;
+  margin-top: 0;
+  padding: 14px 2px;
+  border-top: 0;
+  border-bottom: 1px solid #e7e2d8;
+}
+.a4-view-screen .a4-settings-content .a4-settings-group:first-of-type { margin-top: 12px; border-top: 1px solid #e7e2d8; }
+.a4-view-screen .a4-settings-group h2 {
+  margin: 0 0 4px;
+  color: #8a7a68;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: none;
+}
+.a4-view-screen .a4-settings-content .search { margin-top: 0; }
+.a4-view-screen .a4-settings-content .a4-settings-control {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  justify-content: flex-start;
+  text-align: left;
+}
+.a4-view-screen .a4-settings-content .btn-shuffle.a4-settings-control {
+  border-color: #e4d9c8;
+  background: rgba(255, 254, 250, .82);
+  box-shadow: none;
+  color: var(--ink);
+}
+.a4-view-screen .a4-settings-content .btn-shuffle.a4-settings-control:hover:not(:disabled) {
+  border-color: #c8a98b;
+  background: #f8efe4;
+}
+.a4-view-screen .a4-settings-content .btn-shuffle svg { width: 15px; height: 15px; }
+.a4-view-screen .a4-settings-content .image-size-control-a4,
+.a4-view-screen .a4-sort-control {
+  min-height: 34px;
+  padding: 3px 8px;
+  border-radius: 9px;
+}
+.a4-view-screen .a4-settings-content .image-size-control-a4 select,
+.a4-view-screen .a4-sort-control select { height: 28px; }
+.a4-view-screen .a4-output-actions { padding-top: 14px; border-top: 0; }
+.a4-view-screen .a4-output-actions .a4-settings-control { margin-top: 0; justify-content: center; text-align: center; min-height: 38px; }
+
+.a4-view-screen .a4-sort-check { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; font-weight: 600; color: var(--soft); cursor: pointer; }
+.a4-view-screen .a4-sort-check input { accent-color: #8a4a33; }
+.a4-view-screen .a4-image-gauge { margin-top: 2px; }
+.a4-view-screen .a4-settings-content .btn-shuffle.a4-settings-control {
+  border-color: #584638;
+  background: linear-gradient(#584638, #34291f);
+  box-shadow: 0 2px 0 #261d17, 0 8px 18px rgba(60, 45, 30, .22), inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #f5e8d6;
+  justify-content: center;
+}
+.a4-view-screen .a4-settings-content .btn-shuffle.a4-settings-control:hover:not(:disabled) {
+  border-color: #d8b991;
+  background: linear-gradient(#6d5742, #433326);
+}
+
+.a4-section-divider {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 -4px;
+  color: #8a7a68;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.a4-section-divider::before,
+.a4-section-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #d9cdbb;
+}

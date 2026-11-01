@@ -76,6 +76,7 @@ const DEFAULT_STUDY_SETTINGS = {
   desiredRetention: DEFAULT_DESIRED_RETENTION,
   imageSizes: { study: 55, a4: 'medium', status: 'medium' },
   imageHeights: { front: 55, back: 55 },
+  a4ImageHeight: 14,
   shortcuts: {
     flip: 'Space',
     hint: 'ArrowDown',
@@ -328,8 +329,7 @@ const state = {
   studyRecordsOpen: { sessions: false, keys: false },
   studyRecordsLoading: false,
   studyRecordsError: '',
-  learningStatusFilter: 'all',
-  learningStatusShowValue: false,
+  learningStatusFilters: ['due', 'scheduled', 'new'],
   learningStatusPlanMessage: '',
   planPanelOpen: false,
   learningStatusQuery: '',
@@ -413,8 +413,20 @@ function normalizeStudySettings(settings) {
       side,
       normalizeStudyImageHeight(settings?.imageHeights?.[side] ?? settings?.imageSizes?.study),
     ])),
+    a4ImageHeight: normalizeA4ImageHeight(settings?.a4ImageHeight ?? settings?.imageSizes?.a4),
     shortcuts,
   };
+}
+
+const A4_IMAGE_HEIGHT_RANGE = { min: 6, max: 50 };
+const LEGACY_A4_IMAGE_HEIGHTS = { small: 8, medium: 14, large: 24, fill: 45 };
+
+function normalizeA4ImageHeight(value) {
+  const number = typeof value === 'string' && value in LEGACY_A4_IMAGE_HEIGHTS
+    ? LEGACY_A4_IMAGE_HEIGHTS[value]
+    : Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_STUDY_SETTINGS.a4ImageHeight;
+  return Math.min(A4_IMAGE_HEIGHT_RANGE.max, Math.max(A4_IMAGE_HEIGHT_RANGE.min, Math.round(number)));
 }
 
 const IMAGE_SIZE_VIEWS = ['study', 'a4', 'status'];
@@ -473,7 +485,8 @@ function applyImageSizes() {
   const heights = state.studySettings.imageHeights;
   document.documentElement.style.setProperty('--study-img-h-front', String(heights.front));
   document.documentElement.style.setProperty('--study-img-h-back', String(heights.back));
-  IMAGE_SIZE_VIEWS.filter((view) => view !== 'study').forEach((view) => {
+  document.documentElement.style.setProperty('--a4-img-h', `${state.studySettings.a4ImageHeight}mm`);
+  IMAGE_SIZE_VIEWS.filter((view) => view !== 'study' && view !== 'a4').forEach((view) => {
     document.documentElement.dataset[`img${view[0].toUpperCase()}${view.slice(1)}`] = sizes[view];
   });
 }
@@ -3183,7 +3196,6 @@ function studyHTML() {
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l4 3V7l-4 3H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
               </button>
               <p class="study-value">${richText(shown.value)}</p>
-              ${record ? `<p class="study-fsrs-meta">${esc(fsrsStateLabel(record.card))} · ${record.card.reps} ${L('회 복습','reviews')} · ${L('난이도','Difficulty')} ${record.card.difficulty.toFixed(1)} · ${L('안정성','Stability')} ${record.card.stability.toFixed(1)} ${L('일','days')}<br>${L('예정','Due')}: ${esc(formatFsrsDate(record.card.dueAt))}</p>` : ''}
               <div class="study-back-extras">
                 ${session.settings.showHintOnBack || session.showBackHint
                   ? `<p class="study-hint">${pair.hint ? richText(pair.hint) : esc(L('등록된 hint가 없어요.','No hint available.'))}</p>`
@@ -3379,10 +3391,9 @@ function learningStatusHTML() {
     scheduled: records.filter((item) => item.category === 'scheduled').length,
   };
   const filters = [
-    ['all', L('전체', 'All'), counts.all],
     ['due', L('복습 대상', 'Due'), counts.due],
-    ['new', L('새 카드', 'New'), counts.new],
     ['scheduled', L('복습 예정', 'Scheduled'), counts.scheduled],
+    ['new', L('새 카드', 'New'), counts.new],
   ];
   const sortedRecords = records.sort((a, b) => {
     const order = { due: 0, new: 1, scheduled: 2 };
@@ -3448,13 +3459,9 @@ function learningStatusHTML() {
           <span>${L('항목 검색', 'Search items')}</span>
           <input type="search" data-learning-status-search value="${esc(state.learningStatusQuery)}" placeholder="${L('key, value, hint 검색', 'Search key, value, or hint')}" autocomplete="off">
         </label>
-        ${imageSizeControlHTML('status')}
         <div class="learning-status-filters" role="group" aria-label="${L('학습 상태 필터', 'Learning status filter')}">
-          ${filters.map(([id, label, count]) => `<button type="button" class="learning-status-filter${state.learningStatusFilter === id ? ' is-active' : ''}" data-learning-status-filter="${id}" aria-pressed="${state.learningStatusFilter === id}">${label}<span>${count}</span></button>`).join('')}
+          ${filters.map(([id, label, count]) => `<button type="button" class="learning-status-filter${state.learningStatusFilters.includes(id) ? ' is-active' : ''}" data-learning-status-filter="${id}" aria-pressed="${state.learningStatusFilters.includes(id)}">${label}<span>${count}</span></button>`).join('')}
         </div>
-        <button type="button" class="learning-status-swap" data-learning-status-swap aria-pressed="${state.learningStatusShowValue}" title="${L('카드에 표시할 항목을 key와 value 사이에서 바꿉니다.', 'Switch the card tiles between key and value.')}">
-          ${state.learningStatusShowValue ? L('Value 표시 중 · Key로 전환', 'Showing value · Switch to key') : L('Key 표시 중 · Value로 전환', 'Showing key · Switch to value')}
-        </button>
       </section>
       <p class="learning-status-footnote">${L(
         '카드가 진할수록 현재 기억 확률이 높아요. 확률은 현재 시각 기준 추정치이며 매시간 갱신돼요. 카드를 눌러 자세한 정보를 확인하세요.',
@@ -3464,7 +3471,7 @@ function learningStatusHTML() {
         ${sortedRecords.length
           ? sortedRecords.map(({ pair, record, category }) => `
             <button type="button" class="learning-status-card" data-learning-status-card="${category}" data-learning-status-open="${esc(record.id)}" data-search="${esc(`${pair.key} ${pair.value} ${pair.hint}`.toLocaleLowerCase())}" aria-haspopup="dialog" title="${L('눌러서 카드 정보 보기', 'Select to view card details')}">
-              <span class="learning-status-card-key">${richText(state.learningStatusShowValue ? pair.value : pair.key)}</span>
+              <span class="learning-status-card-key">${richText(swappedPair(pair).key)}</span>
               <span class="learning-status-card-recall" data-fsrs-retrievability="${esc(record.id)}">${category === 'new' ? L('학습 전', 'Not studied') : '…'}</span>
             </button>
             <template data-learning-status-detail="${esc(record.id)}">
@@ -3472,11 +3479,12 @@ function learningStatusHTML() {
                 <button type="button" class="learning-status-dialog-close" data-learning-status-close aria-label="${L('닫기', 'Close')}">×</button>
                 <span class="learning-status-badge is-${category}">${statusLabels[category]}</span>
                 <div class="learning-status-dialog-content">
-                  <section>
-                    <h3>${L('값', 'Value')}</h3>
-                    <div class="learning-status-value">${richText(pair.value)}</div>
-                    ${pair.hint ? `<h3>${L('힌트', 'Hint')}</h3><div class="learning-status-hint">${richText(pair.hint)}</div>` : ''}
-                  </section>
+                  <div class="learning-status-back-wrap">
+                    <div class="learning-status-back">
+                      <div class="learning-status-back-value" style="font-size:${ankiFontSize(state.studySettings.fontSizes.back)}">${richText(swappedPair(pair).value)}</div>
+                      <div class="learning-status-back-hint" style="font-size:${ankiFontSize(state.studySettings.fontSizes.back)}">${pair.hint ? richText(pair.hint) : `<span class="learning-status-nohint">${L('등록된 hint가 없어요.', 'No hint available.')}</span>`}</div>
+                    </div>
+                  </div>
                   <section class="learning-status-dialog-recall">
                     <span>${L('현재 기억 확률', 'Current recall probability')}</span>
                     <strong data-learning-status-dialog-recall>${category === 'new' ? L('학습 전', 'Not studied') : '…'}</strong>
@@ -3517,36 +3525,32 @@ function a4ViewHTML() {
         </svg>
       </button>
       <section class="panel a4-settings" aria-label="${L('설정','Settings')}">
-        <div class="a4-settings-topbar">
-          <button type="button" id="collapseSettingsBtn" class="a4-settings-collapse" aria-label="${L('설정 접기','Collapse settings')}" title="${L('설정 접기','Collapse settings')}">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.49.49 0 0 0-.61.22L2.63 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.05.3-.08.62-.08.94s.03.64.08.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.21.37.3.61.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54c.04.24.24.42.49.42h3.84c.25 0 .45-.18.49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96c.23.09.49-.01.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.01-1.56ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/>
-            </svg>
-          </button>
-        </div>
+        <button type="button" id="collapseSettingsBtn" class="a4-settings-collapse" aria-label="${L('설정 접기','Collapse settings')}" title="${L('설정 접기','Collapse settings')}">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <div class="a4-settings-content">
           <p class="big a4-item-count"><strong>${itemCounts.totalCount}</strong><span class="big-sub">${L('개 항목',' items')}</span></p>
           <p class="selection-count-hint">${L('FSRS 복습 일정은 학습 페이지에서 확인할 수 있어요.','See FSRS due cards on the Study page.')}</p>
           ${state.notice ? `<p class="notice a4-notice" role="status">${esc(state.notice)}</p>` : ''}
           <p id="a4StorageError" class="error" role="alert"${state.error ? '' : ' hidden'}>${esc(state.error)}</p>
-          <label class="a4-search-label" for="studySearch">${L('key 또는 value 검색','Search by key or value')}</label>
-          <input id="studySearch" class="search" type="search" placeholder="${L('key 또는 value 검색','Search by key or value')}" value="${esc(state.a4Query)}" />
+          <section class="a4-settings-group" aria-labelledby="a4SearchTitle">
+            <h2 id="a4SearchTitle">${L('검색', 'Search')}</h2>
+            <input id="studySearch" class="search" type="search" aria-label="${L('key 또는 value 검색','Search by key or value')}" placeholder="${L('key 또는 value 검색','Search by key or value')}" value="${esc(state.a4Query)}" />
+          </section>
           <section class="a4-settings-group" aria-labelledby="a4ViewSettingsTitle">
             <h2 id="a4ViewSettingsTitle">${L('표시 설정', 'Display')}</h2>
             <button type="button" id="toggleAllValuesBtn" class="btn a4-settings-control a4-values-toggle" aria-pressed="${state.showAllA4Values}" data-study-hint="${L('전체 value 보기','Show all values')}">${state.showAllA4Values ? L('전체 value 가리기','Hide all values') : L('전체 value 보기','Show all values')}</button>
             <button type="button" id="toggleAllHintsBtn" class="btn a4-settings-control" aria-pressed="false" data-study-hint="${L('전체 hint 보기','Show all hints')}">${L('전체 hint 보기','Show all hints')}</button>
             <button type="button" id="a4SwapBtn" class="btn a4-settings-control" aria-pressed="${state.studySettings.swapKeyValue}" data-study-hint="${L('key와 value의 앞뒤를 바꿔서 표시합니다.','Swap which side is shown as key and value.')}">${L('key-value 반전','Swap key-value')}</button>
-            ${imageSizeControlHTML('a4')}
+            <label class="study-font-setting a4-image-gauge">
+              <span>${L('이미지', 'Image')}</span>
+              <input type="range" min="${A4_IMAGE_HEIGHT_RANGE.min}" max="${A4_IMAGE_HEIGHT_RANGE.max}" step="1" id="a4ImageHeight" value="${state.studySettings.a4ImageHeight}" aria-label="${L('이미지 크기', 'Image size')}">
+              <output>${state.studySettings.a4ImageHeight}</output>
+            </label>
           </section>
           <section class="a4-settings-group" aria-labelledby="a4OrderSettingsTitle">
             <h2 id="a4OrderSettingsTitle">${L('학습 순서', 'Study order')}</h2>
-            <label class="a4-sort-control">
-              <span>${L('정렬 기준', 'Sort by')}</span>
-              <select id="a4SortSelect">
-                <option value="order"${state.a4Sort === 'order' ? ' selected' : ''}>${L('기본 순서', 'Original order')}</option>
-                <option value="priority"${state.a4Sort === 'priority' ? ' selected' : ''}>${L('학습 우선순위', 'Learning priority')}</option>
-              </select>
-            </label>
+            <label class="a4-sort-check"><input type="checkbox" id="a4SortPriority"${state.a4Sort === 'priority' ? ' checked' : ''}> ${L('학습 우선순위로 정렬', 'Sort by learning priority')}</label>
             <p class="a4-priority-status" role="status"${state.a4Sort === 'priority' && a4PriorityStatusText() ? '' : ' hidden'}>${esc(a4PriorityStatusText())}</p>
             <button type="button" id="a4ReshuffleBtn" class="btn btn-shuffle a4-settings-control" data-study-hint="${L('순서 섞기','Shuffle order')}">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
@@ -3818,9 +3822,9 @@ function renderA4View() {
     .map(({ rows, section, sectionStart }, i) => {
       const isLastPage = i === list.length - 1;
       const sectionLabel = a4SectionLabel(section, sectionStart);
-      return `<div class="frame" style="width:${SHEET_W_PX * scale}px;height:${SHEET_H_PX * scale}px">
+      return `${sectionLabel ? `<div class="a4-section-divider" style="width:${SHEET_W_PX * scale}px"><span>${esc(sectionLabel)}</span></div>` : ''}<div class="frame" style="width:${SHEET_W_PX * scale}px;height:${SHEET_H_PX * scale}px">
         <div class="sheet-scaler" style="transform:scale(${scale});transform-origin:top left">
-          ${a4SheetHTML(rows, i + 1, totalPages, isLastPage, sectionLabel)}
+          ${a4SheetHTML(rows, i + 1, totalPages, isLastPage)}
         </div>
       </div>`;
     })
@@ -4532,8 +4536,7 @@ function attachLearningStatusPage() {
     const query = state.learningStatusQuery.trim().toLocaleLowerCase();
     let visibleCount = 0;
     appEl.querySelectorAll('[data-learning-status-card]').forEach((card) => {
-      const matchesFilter = state.learningStatusFilter === 'all' ||
-        card.dataset.learningStatusCard === state.learningStatusFilter;
+      const matchesFilter = state.learningStatusFilters.includes(card.dataset.learningStatusCard);
       const matchesQuery = !query || card.dataset.search.includes(query);
       card.hidden = !matchesFilter || !matchesQuery;
       if (!card.hidden) visibleCount += 1;
@@ -4546,13 +4549,12 @@ function attachLearningStatusPage() {
   });
   appEl.querySelectorAll('[data-learning-status-filter]').forEach((button) => {
     button.addEventListener('click', () => {
-      state.learningStatusFilter = button.dataset.learningStatusFilter;
+      const id = button.dataset.learningStatusFilter;
+      state.learningStatusFilters = state.learningStatusFilters.includes(id)
+        ? state.learningStatusFilters.filter((item) => item !== id)
+        : [...state.learningStatusFilters, id];
       render();
     });
-  });
-  appEl.querySelector('[data-learning-status-swap]')?.addEventListener('click', () => {
-    state.learningStatusShowValue = !state.learningStatusShowValue;
-    render();
   });
   applyFilters();
 }
@@ -5357,14 +5359,25 @@ function attach() {
     });
   }
 
-  const a4SortSelect = document.getElementById('a4SortSelect');
-  a4SortSelect?.addEventListener('change', () => {
-    state.a4Sort = a4SortSelect.value === 'priority' ? 'priority' : 'order';
+  const a4SortCheck = document.getElementById('a4SortPriority');
+  a4SortCheck?.addEventListener('change', () => {
+    state.a4Sort = a4SortCheck.checked ? 'priority' : 'order';
     const priorityStatus = document.querySelector('.a4-priority-status');
     if (priorityStatus) {
       priorityStatus.textContent = a4PriorityStatusText();
       priorityStatus.hidden = state.a4Sort !== 'priority' || !priorityStatus.textContent;
     }
+    renderA4View();
+  });
+
+  const a4ImageGauge = document.getElementById('a4ImageHeight');
+  a4ImageGauge?.addEventListener('input', () => {
+    state.studySettings.a4ImageHeight = normalizeA4ImageHeight(a4ImageGauge.value);
+    a4ImageGauge.nextElementSibling.textContent = String(state.studySettings.a4ImageHeight);
+    applyImageSizes();
+  });
+  a4ImageGauge?.addEventListener('change', () => {
+    saveStudySettings();
     renderA4View();
   });
 
