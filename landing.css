@@ -25,10 +25,10 @@ body {
 
 main {
   display: flex;
-  max-width: 1240px;
   min-height: 100vh;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 72px 24px;
+  padding: 48px 24px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -44,7 +44,7 @@ h1 {
 
 .intro {
   max-width: 560px;
-  margin: 20px 0 40px;
+  margin: 16px 0 32px;
   color: #6b6358;
   font-size: 18px;
 }
@@ -52,6 +52,7 @@ h1 {
 .video {
   position: relative;
   width: 100%;
+  max-width: 960px;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: 16px;
@@ -69,8 +70,8 @@ h1 {
 
 .start {
   display: inline-flex;
-  margin-top: 40px;
-  padding: 20px 56px;
+  margin-top: 24px;
+  padding: 18px 48px;
   border-radius: 16px;
   background: #8f5a3c;
   color: #fff;
