@@ -1461,6 +1461,15 @@ async function recoverProjectsFromFolder(directory) {
   return { count: recoveredProjects.length, errors: recovery.errors };
 }
 
+async function resetProjectsForDirectory() {
+  const stale = await listProjects();
+  for (const project of stale) await deleteProjectRecord(project.id);
+  state.projects = [];
+  state.projectOrder = [];
+  state.project = null;
+  await saveProjectOrder([]);
+}
+
 async function prepareWorkbookDirectory(directory) {
   const recovered = await recoverProjectsFromFolder(directory);
   if (recovered.errors.length) {
@@ -1490,6 +1499,7 @@ async function connectWorkbookDirectory() {
     state.notice = L(`${directory.name} 폴더를 저장 위치로 연결했어요.`, `Connected the ${directory.name} folder as your save location.`);
     let prepared;
     try {
+      await resetProjectsForDirectory();
       prepared = await prepareWorkbookDirectory(directory);
     } catch (error) {
       state.error = L(
