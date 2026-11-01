@@ -6532,3 +6532,19 @@ html[data-img-a4="fill"] .a4-print-sheet .cell-img { max-height: 45mm; }
 
 .study-font-setting.is-disabled { opacity: 0.4; }
 .study-font-setting.is-disabled input { cursor: not-allowed; }
+
+/* Learning Status: 검색·옵션은 한 줄, 필터는 아래 줄로 정리 */
+.learning-status-toolbar {
+  grid-template-columns: minmax(200px, 1fr) auto auto;
+  align-items: end;
+  gap: 12px 12px;
+  margin: 6px 0 8px;
+}
+.learning-status-toolbar .learning-status-search { grid-column: 1; }
+.learning-status-toolbar .image-size-control-status { grid-column: 2; }
+.learning-status-toolbar .learning-status-swap { grid-column: 3; justify-self: stretch; min-height: 42px; }
+.learning-status-toolbar .learning-status-filters { grid-column: 1 / -1; grid-row: 2; }
+.learning-status-top { margin-bottom: 18px; }
+.learning-status-heading { margin: 8px 0 18px; }
+.learning-status-footnote { margin: 4px 0 14px; font-size: 11.5px; }
+.learning-status-toolbar .image-size-control-status select { height: 42px; border-radius: 10px; }

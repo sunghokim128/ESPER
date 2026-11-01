@@ -478,6 +478,13 @@ function applyImageSizes() {
   });
 }
 
+// 기억률이 낮을수록 카드가 눈에 띄게 흐려지도록 곡선을 가파르게 잡습니다.
+function applyRetentionOpacity(card, probability) {
+  const intensity = Math.max(0, Math.min(1, (probability - 0.4) / 0.6));
+  card.style.setProperty('--retention-opacity', (0.03 + intensity * 0.37).toFixed(2));
+  card.style.setProperty('--retention-content-opacity', (0.1 + 0.9 * intensity ** 2).toFixed(2));
+}
+
 function currentStudySide() {
   return state.study?.flipped ? 'back' : 'front';
 }
@@ -3727,9 +3734,7 @@ function refreshLearningStatusRetrievability() {
       }
       const card = element.closest('.learning-status-card');
       if (card) {
-        const intensity = Math.max(0, Math.min(1, (probability - 0.5) / 0.5));
-        card.style.setProperty('--retention-opacity', (0.08 + intensity * 0.32).toFixed(2));
-        card.style.setProperty('--retention-content-opacity', (0.3 + intensity * 0.7).toFixed(2));
+        applyRetentionOpacity(card, probability);
         card.dataset.recallLevel = percent >= 85 ? 'high' : percent >= 60 ? 'mid' : 'low';
       }
       element.dataset.lastUpdated = dateTimeFormat.format(now);
@@ -4480,9 +4485,7 @@ function attachLearningStatusPage() {
       if (!element.isConnected || element.dataset.probabilityRequest !== requestId) return;
       const percent = Math.round(probability * 100);
       element.textContent = `${percent}%`;
-      const intensity = Math.max(0, Math.min(1, (probability - 0.5) / 0.5));
-      card.style.setProperty('--retention-opacity', (0.08 + intensity * 0.32).toFixed(2));
-      card.style.setProperty('--retention-content-opacity', (0.3 + intensity * 0.7).toFixed(2));
+      applyRetentionOpacity(card, probability);
       const dateTime = new Intl.DateTimeFormat(language === 'ko' ? 'ko-KR' : 'en', {
         dateStyle: 'medium',
         timeStyle: 'short',
