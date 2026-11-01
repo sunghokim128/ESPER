@@ -3625,15 +3625,28 @@ function learningStatusHTML() {
       <dialog class="fsrs-guide fsrs-guide-dialog" aria-label="${L('FSRS-7이란?', 'What is FSRS-7?')}">
         <button type="button" class="fsrs-guide-close" data-fsrs-guide-close aria-label="${L('닫기', 'Close')}">×</button>
         <h3>${L('FSRS-7이란?', 'What is FSRS-7?')}</h3>
-        <p>${L('복습 기록으로 카드마다 기억 상태를 추적하고, 망각 곡선으로 다음 복습 시점을 정하는 간격 반복 알고리즘이에요.', 'A spaced-repetition algorithm that tracks each card’s memory state and uses a forgetting curve to schedule the next review.')}</p>
+        <p class="fsrs-guide-lead">${L('FSRS-7은 복습 기록으로 카드마다 기억 상태를 추적하고, 망각 곡선으로 "언제 복습하면 좋을지"를 계산하는 간격 반복 알고리즘이에요. 고정된 일정표 대신, 내가 실제로 기억하는 정도에 맞춰 복습 시점이 카드마다 달라져요.', 'FSRS-7 is a spaced-repetition algorithm that tracks each card’s memory state from your review history and uses a forgetting curve to decide when to review next. Instead of a fixed schedule, timing adapts to how well you actually remember each card.')}</p>
+        <h4>${L('카드마다 추적하는 값', 'What is tracked per card')}</h4>
         <dl>
-          <dt>${L('기억 확률', 'Recall probability')}</dt>
-          <dd>${L('지금 이 카드를 떠올릴 수 있을 확률 추정치. 시간이 지날수록 떨어져요.', 'Estimated chance you can recall the card now. It falls as time passes.')}</dd>
-          <dt>${L('난이도', 'Difficulty')}</dt>
-          <dd>${L('1~10. 높을수록 외우기 어려운 카드예요.', '1–10. Higher means harder to remember.')}</dd>
-          <dt>${L('안정성', 'Stability')}</dt>
-          <dd>${L('기억이 유지되는 기간(일). 클수록 천천히 잊어요.', 'How long the memory lasts, in days. Larger means slower forgetting.')}</dd>
+          <dt>${L('기억 확률 (Retrievability)', 'Recall probability (Retrievability)')}</dt>
+          <dd>${L('지금 이 카드를 떠올릴 수 있을 확률 추정치예요. 복습 직후 100%에 가깝고, 시간이 지날수록 망각 곡선을 따라 떨어져요. 학습 상태 페이지의 카드 농도가 바로 이 값이에요.', 'Estimated chance you can recall the card right now. It is near 100% right after a review and decays along the forgetting curve. The card opacity on the Learning Status page is this value.')}</dd>
+          <dt>${L('안정성 (Stability)', 'Stability')}</dt>
+          <dd>${L('기억 확률이 100%에서 90%로 떨어지기까지 걸리는 기간(일)이에요. 클수록 천천히 잊어요. 복습에 성공할수록 커지고, 잊어버리면 크게 줄어요. 복습 간격은 이 값에 비례해 늘어나요.', 'Days it takes for recall probability to fall from 100% to 90%. Larger means slower forgetting. It grows after successful reviews and drops sharply after a lapse. Review intervals grow in proportion to it.')}</dd>
+          <dt>${L('난이도 (Difficulty)', 'Difficulty')}</dt>
+          <dd>${L('1~10. 높을수록 외우기 어려운 카드예요. 난이도가 높으면 복습에 성공해도 안정성이 느리게 늘어요. Again/Hard를 자주 누르면 올라가고, Easy를 누르면 내려가요.', '1–10. Higher means harder to remember, so stability grows more slowly even when you succeed. It rises when you press Again/Hard often and falls with Easy.')}</dd>
+          <dt>${L('이중 흔적 (빠른/느린 기억)', 'Dual trace (fast / slow memory)')}</dt>
+          <dd>${L('FSRS-7의 특징이에요. 갓 외운 단기 기억(빠르게 사라짐)과 반복으로 굳어진 장기 기억(천천히 사라짐)을 따로 추적해 두 곡선을 합쳐 기억 확률을 계산해요. 그래서 같은 날 여러 번 복습한 효과와 며칠 간격 복습의 효과를 더 정확히 구분해요.', 'A hallmark of FSRS-7. It tracks a fast-fading short-term trace and a slow-fading long-term trace separately and combines the two curves into the recall probability. This lets it tell same-day repetition apart from spaced repetition more accurately.')}</dd>
         </dl>
+        <h4>${L('복습 평가와 다음 복습', 'Ratings and the next review')}</h4>
+        <dl>
+          <dt>${L('Again · Hard · Good · Easy', 'Again · Hard · Good · Easy')}</dt>
+          <dd>${L('복습 후 고르는 4단계 평가예요. 평가에 따라 안정성과 난이도가 갱신되고 다음 복습일이 정해져요. 대부분의 카드는 Good이면 충분해요.', 'The four ratings you choose after a review. They update stability and difficulty and set the next due date. Good is right for most cards.')}</dd>
+          <dt>${L('목표 기억률 (Desired retention)', 'Target retention (Desired retention)')}</dt>
+          <dd>${L('복습 시점에 유지하고 싶은 기억 확률이에요. 높이면 복습 횟수가 늘고 더 확실히 기억하며, 낮추면 복습은 줄지만 더 많이 잊어요. 보통 85~95%를 권장해요.', 'The recall probability you want to keep at review time. Raising it means more reviews and firmer memory; lowering it means fewer reviews but more forgetting. 85–95% is typical.')}</dd>
+          <dt>${L('시험 날짜', 'Exam date')}</dt>
+          <dd>${L('시험일을 넘기는 복습 간격은 만들지 않도록 최대 간격을 시험일까지로 제한해요.', 'The maximum interval is capped so no review is scheduled past your exam date.')}</dd>
+        </dl>
+        <p class="fsrs-guide-note">${L('모든 수치는 복습 기록에서 계산한 추정치예요. 개인의 실제 기억과는 차이가 있을 수 있고, 기록이 쌓일수록 정확해져요.', 'All values are estimates computed from your review history. They may differ from your actual memory and get more accurate as history accumulates.')}</p>
         <p class="fsrs-guide-source">${L('출처', 'Source')}: <a href="https://github.com/open-spaced-repetition/ts-fsrs" target="_blank" rel="noopener noreferrer">ts-fsrs</a> · <a href="https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler" target="_blank" rel="noopener noreferrer">Free Spaced Repetition Scheduler</a></p>
       </dialog>
       </div>
