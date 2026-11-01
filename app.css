@@ -203,10 +203,27 @@ button {
 
 .support-qr {
   display: block;
-  width: min(220px, 70vw);
+  width: min(170px, 60vw);
   height: auto;
   border-radius: 10px;
   background: #fff;
+}
+
+.support-sponsors-link {
+  display: inline-block;
+  margin: 10px 0 6px;
+  padding: 5px 12px;
+  border: 1px solid #d9c3b0;
+  border-radius: 999px;
+  color: #8a4a33;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background .15s;
+}
+
+.support-sponsors-link:hover {
+  background: #f4e7df;
 }
 
 .shell {
@@ -4985,9 +5002,11 @@ body:has(.app-shell.workspace-page) {
 
 .workspace-screen .workspace-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
+  margin: 0 0 32px;
+  padding-top: 8px;
 }
 
 .workspace-screen .workspace-page-actions {
@@ -5001,27 +5020,25 @@ body:has(.app-shell.workspace-page) {
 
 .create-project-button {
   display: inline-flex;
-  min-height: 52px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
-  gap: 11px;
-  padding: 10px 17px;
-  border: 1px solid #78341f;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #a94d31, #78341f);
-  box-shadow: 0 7px 18px rgba(120, 52, 31, .2);
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid #8a4a33;
+  border-radius: 10px;
+  background: #8a4a33;
+  box-shadow: none;
   color: #fffaf4;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  transition: box-shadow .15s, filter .15s, transform .15s;
+  transition: background .15s;
 }
 
 .create-project-button:hover {
-  box-shadow: 0 9px 22px rgba(120, 52, 31, .26);
-  filter: brightness(1.05);
-  transform: translateY(-1px);
+  background: #773d28;
 }
 
 .create-project-button:focus-visible {
@@ -5031,12 +5048,10 @@ body:has(.app-shell.workspace-page) {
 
 .create-project-icon {
   display: grid;
-  width: 25px;
-  height: 25px;
+  width: 18px;
+  height: 18px;
   place-items: center;
-  border: 1px solid rgba(255,255,255,.5);
-  border-radius: 8px;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 400;
   line-height: 1;
 }

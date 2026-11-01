@@ -2699,8 +2699,6 @@ function workspaceHTML() {
       <div class="workspace-heading">
         <div class="workspace-heading-copy">
           <p class="workspace-eyebrow">${L('나의 학습 공간','YOUR STUDY SPACE')}</p>
-          <h1>${L('프로젝트','Projects')}</h1>
-          <p>${L('프로젝트를 선택해 학습을 시작하거나 A4 view와 나의 기록을 확인하세요.','Choose a project to study, open its A4 view, or check your log.')}</p>
         </div>
         <div class="workspace-page-actions">
           <button type="button" class="create-project-button" data-open-format-guide aria-haspopup="dialog">
@@ -3842,7 +3840,8 @@ function supportWidgetHTML() {
           <h2 id="supportTitle">${L('ESPER가 도움이 되었나요?', 'Is ESPER helping you?')}</h2>
           <p></p>
           <img class="support-qr" src="${SUPPORT_QR_SRC[language]}" alt="${L('자발적 후원을 위한 QR 코드', 'QR code for voluntary support')}" />
-          <p id="supportDescription">${L('후원하신 금액은 전액 개발자의 식비와 Copilot 구독비로 탕진됩니다.', 'Every donation goes directly toward keeping the developer fed and his Copilot running.')}</p>
+          <a class="support-sponsors-link" href="https://github.com/sponsors/sunghokim128" target="_blank" rel="noopener noreferrer">${L('GitHub Sponsors에서 후원하기 ↗', 'Sponsor on GitHub ↗')}</a>
+          <p id="supportDescription">${L('후원하신 금액은 전액 개발자의 식비와<br>Copilot 구독비로 탕진됩니다.', 'Every donation goes directly toward keeping the developer fed and his Copilot running.')}</p>
         </div>
       </dialog>
     </div>`;
