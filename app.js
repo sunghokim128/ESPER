@@ -903,7 +903,7 @@ async function handleFile(file) {
 }
 
 const TUTORIAL_DECK_FILES = {
-  ko: '튜토리얼 영단어 엑.xlsx',
+  ko: '튜토리얼 영단어 덱.xlsx',
   en: 'Tutorial Vocab Deck.xlsx',
 };
 
