@@ -6,6 +6,10 @@ ESPER is a static web app (GitHub Pages) for studying any set of information org
 
 On first launch, choose **한국어 사용자** or **English user**. Change the language at any time from the settings menu. Language changes the interface, AI prompt, and support QR only; it does not change workbook contents or study progress.
 
+## Introduction video
+
+[![Watch the ESPER introduction video](https://img.youtube.com/vi/J7beSHbJy94/hqdefault.jpg)](https://www.youtube.com/watch?v=J7beSHbJy94&t=5s)
+
 ## Usage
 
 Open https://sunghokim128.github.io/ESPER/ in a Chromium-based browser (Chrome or Edge), which is required for the folder-access API. Projects are saved in a folder on your own device; the site stores nothing.
