@@ -6855,3 +6855,9 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .study-records-page .study-records-heading { display: block; position: relative; }
 .study-records-page .study-records-back { position: absolute; top: 50%; left: -56px; transform: translateY(-50%); }
 .study-records-page .study-records-back { top: 0; left: calc(36px - (100vw - 100%) / 2); transform: none; }
+.folder-prompt { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); box-shadow: 0 24px 60px rgba(60, 40, 20, .25); }
+.folder-prompt::backdrop { background: rgba(40, 28, 18, .4); }
+.folder-prompt-card { display: grid; gap: 12px; padding: 24px; }
+.folder-prompt-card h2 { margin: 0; font-size: 17px; }
+.folder-prompt-card p { margin: 0; color: var(--soft); font-size: 13px; line-height: 1.6; }
+.folder-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }

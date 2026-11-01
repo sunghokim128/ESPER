@@ -284,6 +284,7 @@ const state = {
   directoryName: '',
   directoryHandle: null,
   directorySaved: false,
+  folderPromptDismissed: false,
   directoryConnected: false,
   pairs: [],
   fsrsData: null,
@@ -1703,6 +1704,7 @@ async function connectWorkbookDirectory() {
     const directory = await window.showDirectoryPicker({
       id: 'esper-excel-projects',
       mode: 'readwrite',
+      startIn: 'documents',
     });
     await saveWorkbookDirectory(directory);
     state.directoryHandle = directory;
@@ -2841,6 +2843,24 @@ function folderConnectionHTML(compact = false) {
     </div>`;
 }
 
+function folderPromptHTML() {
+  if (state.directorySaved || state.folderPromptDismissed) return '';
+  return `
+    <dialog class="folder-prompt" id="folderPrompt" aria-labelledby="folderPromptTitle">
+      <div class="folder-prompt-card">
+        <h2 id="folderPromptTitle">${L('프로젝트를 저장할 폴더를 선택해 주세요', 'Choose a folder to save your projects')}</h2>
+        <p>${L(
+          '다음 창에서 고른 폴더가 앞으로 모든 프로젝트와 학습 기록이 저장되는 위치가 돼요. 문서나 바탕화면에 ESPER 전용 폴더를 하나 만들어 선택하는 것을 추천해요.',
+          'The folder you pick in the next window will be where all your projects and study records are saved from now on. We recommend creating a dedicated ESPER folder in Documents or on your Desktop.'
+        )}</p>
+        <div class="folder-prompt-actions">
+          <button type="button" class="btn" data-folder-prompt-later>${L('나중에', 'Later')}</button>
+          <button type="button" class="btn btn-primary" data-folder-prompt-choose>${L('폴더 선택', 'Choose folder')}</button>
+        </div>
+      </div>
+    </dialog>`;
+}
+
 function workspaceHTML() {
   const palette = ['#B5573A', '#2F6F5E', '#4F5BD5', '#6B5B4B'];
   const projectCards = state.projects.map((project, index) => {
@@ -2906,6 +2926,7 @@ function workspaceHTML() {
 
   return `
     ${headerHTML()}
+    ${folderPromptHTML()}
     <main class="shell workspace-screen">
       ${formatGuideHTML()}
       ${state.notice ? `<p class="notice" role="status">${esc(state.notice)}</p>` : ''}
@@ -5513,6 +5534,20 @@ function attach() {
     });
   }
 
+  const folderPrompt = document.getElementById('folderPrompt');
+  if (folderPrompt) {
+    folderPrompt.addEventListener('cancel', () => { state.folderPromptDismissed = true; });
+    folderPrompt.querySelector('[data-folder-prompt-later]').addEventListener('click', () => {
+      state.folderPromptDismissed = true;
+      folderPrompt.close();
+    });
+    folderPrompt.querySelector('[data-folder-prompt-choose]').addEventListener('click', () => {
+      state.folderPromptDismissed = true;
+      folderPrompt.close();
+      connectWorkbookDirectory();
+    });
+    folderPrompt.showModal();
+  }
   const connectFolderBtn = document.getElementById('connectFolderBtn');
   if (connectFolderBtn) connectFolderBtn.addEventListener('click', connectWorkbookDirectory);
   const formatGuideModal = document.getElementById('formatGuideModal');
