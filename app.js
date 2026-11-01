@@ -74,7 +74,8 @@ const DEFAULT_STUDY_SETTINGS = {
   fontSizes: { front: 72, back: 43 },
   examDate: '',
   desiredRetention: DEFAULT_DESIRED_RETENTION,
-  imageSizes: { study: 'fill', a4: 'medium', status: 'medium' },
+  imageSizes: { study: 55, a4: 'medium', status: 'medium' },
+  imageHeights: { front: 55, back: 55 },
   shortcuts: {
     flip: 'Space',
     hint: 'ArrowDown',
@@ -405,13 +406,28 @@ function normalizeStudySettings(settings) {
     desiredRetention: normalizeDesiredRetention(settings?.desiredRetention ?? DEFAULT_DESIRED_RETENTION),
     imageSizes: Object.fromEntries(IMAGE_SIZE_VIEWS.map((view) => {
       const saved = settings?.imageSizes?.[view];
+      if (view === 'study') return [view, normalizeStudyImageHeight(saved)];
       return [view, IMAGE_SIZE_IDS.includes(saved) ? saved : DEFAULT_STUDY_SETTINGS.imageSizes[view]];
     })),
+    imageHeights: Object.fromEntries(['front', 'back'].map((side) => [
+      side,
+      normalizeStudyImageHeight(settings?.imageHeights?.[side] ?? settings?.imageSizes?.study),
+    ])),
     shortcuts,
   };
 }
 
 const IMAGE_SIZE_VIEWS = ['study', 'a4', 'status'];
+const STUDY_IMAGE_HEIGHT_RANGE = { min: 8, max: 60 };
+const LEGACY_STUDY_IMAGE_HEIGHTS = { small: 12, medium: 24, large: 40, fill: 55 };
+
+function normalizeStudyImageHeight(value) {
+  const number = typeof value === 'string' && value in LEGACY_STUDY_IMAGE_HEIGHTS
+    ? LEGACY_STUDY_IMAGE_HEIGHTS[value]
+    : Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_STUDY_SETTINGS.imageSizes.study;
+  return Math.min(STUDY_IMAGE_HEIGHT_RANGE.max, Math.max(STUDY_IMAGE_HEIGHT_RANGE.min, Math.round(number)));
+}
 const IMAGE_SIZE_IDS = ['small', 'medium', 'large', 'fill'];
 
 function fitStudyCardText() {
@@ -454,9 +470,47 @@ document.addEventListener('load', (event) => {
 
 function applyImageSizes() {
   const sizes = state.studySettings.imageSizes;
-  IMAGE_SIZE_VIEWS.forEach((view) => {
+  const heights = state.studySettings.imageHeights;
+  document.documentElement.style.setProperty('--study-img-h-front', String(heights.front));
+  document.documentElement.style.setProperty('--study-img-h-back', String(heights.back));
+  IMAGE_SIZE_VIEWS.filter((view) => view !== 'study').forEach((view) => {
     document.documentElement.dataset[`img${view[0].toUpperCase()}${view.slice(1)}`] = sizes[view];
   });
+}
+
+function currentStudySide() {
+  return state.study?.flipped ? 'back' : 'front';
+}
+
+const STUDY_FONT_RANGE = { front: { min: 18, max: 120 }, back: { min: 16, max: 72 } };
+
+function cardSizeControlsHTML(side, attr) {
+  const settings = state.studySettings;
+  const font = STUDY_FONT_RANGE[side];
+  const sideLabel = side === 'front' ? L('앞면', 'Front') : L('뒷면', 'Back');
+  return `
+    <label class="study-font-setting">
+      <span>${L('글자', 'Text')}</span>
+      <input type="range" min="${font.min}" max="${font.max}" step="1" data-${attr}-font value="${settings.fontSizes[side]}" aria-label="${sideLabel} ${L('글자 크기', 'text size')}">
+      <output>${settings.fontSizes[side]}px</output>
+    </label>
+    <label class="study-font-setting">
+      <span>${L('이미지', 'Image')}</span>
+      <input type="range" min="${STUDY_IMAGE_HEIGHT_RANGE.min}" max="${STUDY_IMAGE_HEIGHT_RANGE.max}" step="1" data-${attr}-image value="${settings.imageHeights[side]}" aria-label="${sideLabel} ${L('이미지 크기', 'image size')}">
+      <output>${settings.imageHeights[side]}</output>
+    </label>`;
+}
+
+function setCardSize(side, kind, rawValue) {
+  const settings = state.studySettings;
+  if (kind === 'font') {
+    const { min, max } = STUDY_FONT_RANGE[side];
+    settings.fontSizes[side] = Math.min(max, Math.max(min, Number(rawValue)));
+    return settings.fontSizes[side];
+  }
+  settings.imageHeights[side] = normalizeStudyImageHeight(rawValue);
+  applyImageSizes();
+  return settings.imageHeights[side];
 }
 
 function imageSizeControlHTML(view) {
@@ -1124,9 +1178,10 @@ async function startAnkiImport(file) {
       deck,
       noteTypeId,
       mapping: defaultAnkiMapping(deck, noteTypeId),
-      separator: 'newline',
       previewIndex: 0,
       previewFlipped: false,
+      previewHintOpen: false,
+      previewShowHint: false,
       previewUrls: new Set(),
       busy: false,
       progress: '',
@@ -1142,11 +1197,13 @@ async function startAnkiImport(file) {
   }
 }
 
+const ankiFontSize = (size) => `${(size / 7.6).toFixed(3)}cqw`;
+
 function ankiImportHTML() {
   const anki = state.anki;
   const noteType = anki.deck.noteTypes.find((type) => type.id === anki.noteTypeId);
   const imageStats = countFieldImages(anki.deck, anki.noteTypeId);
-  const preview = previewAnkiCards(anki.deck, anki.noteTypeId, anki.mapping, anki.separator, anki.previewIndex);
+  const preview = previewAnkiCards(anki.deck, anki.noteTypeId, anki.mapping, 'newline', anki.previewIndex);
   const areas = [
     ['key', 'Key', L('학습 카드 앞면', 'Front of the card')],
     ['value', 'Value', L('학습 카드 뒷면', 'Back of the card')],
@@ -1158,20 +1215,37 @@ function ankiImportHTML() {
       ? `<img class="cell-img" data-anki-media="${esc(part.name)}" src="${TRANSPARENT_PIXEL}" alt="${L('Anki 이미지 미리보기', 'Anki image preview')}">`
       : esc(part.value)
   )).join('');
+  const settings = state.studySettings;
+  const swapped = settings.swapKeyValue;
+  const frontParts = preview.card ? (swapped ? preview.card.value : preview.card.key) : [];
+  const backParts = preview.card ? (swapped ? preview.card.key : preview.card.value) : [];
+  const hintContent = preview.card?.hint.length
+    ? renderParts(preview.card.hint)
+    : `<span class="anki-preview-nohint">${L('등록된 hint가 없어요.', 'No hint available.')}</span>`;
+  const hintButton = (open) => `<button type="button" class="anki-hint-toggle" data-anki-hint-toggle>${open ? L('hint 닫기', 'Hide hint') : L('hint 보기', 'Show hint')}</button>`;
+  const fontStyle = (side) => `style="font-size:${ankiFontSize(settings.fontSizes[side])}"`;
   const previewFace = preview.card
     ? anki.previewFlipped
-      ? `<div class="anki-preview-face is-back">
-          <span class="anki-preview-label">Value</span>
-          <div class="anki-preview-content">${renderParts(preview.card.value)}</div>
-          ${preview.card.hint.length ? `<div class="anki-preview-hint"><span class="anki-preview-label">Hint</span><div class="anki-preview-content">${renderParts(preview.card.hint)}</div></div>` : ''}
-          <button type="button" class="btn" data-anki-flip>${L('앞면 보기', 'Show front')}</button>
+      ? `<div class="anki-preview-card is-back" data-anki-flip tabindex="0" role="button" aria-label="${L('카드 뒤집기', 'Flip card')}">
+          <div class="anki-preview-content" ${fontStyle('back')}>${renderParts(backParts)}</div>
+          ${settings.showHintOnBack || anki.previewHintOpen
+            ? `<div class="anki-preview-hint" ${fontStyle('back')}>${hintContent}</div>`
+            : hintButton(false)}
         </div>`
-      : `<div class="anki-preview-face">
-          <span class="anki-preview-label">Key</span>
-          <div class="anki-preview-content">${renderParts(preview.card.key)}</div>
-          <button type="button" class="btn" data-anki-flip>${L('뒷면 보기', 'Show back')}</button>
+      : `<div class="anki-preview-card" data-anki-flip tabindex="0" role="button" aria-label="${L('카드 뒤집기', 'Flip card')}">
+          <div class="anki-preview-content" ${fontStyle('front')}>${renderParts(frontParts)}</div>
+          ${anki.previewHintOpen ? `<div class="anki-preview-hint">${hintContent}</div>` : ''}
+          ${hintButton(anki.previewHintOpen)}
         </div>`
     : `<p class="anki-preview-empty">${L('미리 볼 수 있는 카드가 없어요. Key와 Value 필드 배치를 확인해 주세요.', 'No cards to preview. Check the Key and Value field mapping.')}</p>`;
+  const previewSettings = `
+    <aside class="anki-preview-settings" aria-label="${L('학습 카드 설정', 'Card settings')}">
+      <h3>${anki.previewFlipped ? L('카드 크기 · 뒷면', 'Card size · Back') : L('카드 크기 · 앞면', 'Card size · Front')}</h3>
+      ${cardSizeControlsHTML(anki.previewFlipped ? 'back' : 'front', 'anki')}
+      <label class="anki-mini-check"><input type="checkbox" data-anki-setting="showHintOnBack"${settings.showHintOnBack ? ' checked' : ''}> ${L('뒷면에 hint 기본 표시', 'Show hint on back')}</label>
+      <label class="anki-mini-check"><input type="checkbox" data-anki-setting="swapKeyValue"${settings.swapKeyValue ? ' checked' : ''}> ${L('Key·Value 반전', 'Swap key and value')}</label>
+      <p class="anki-mini-note">${L('지금 보고 있는 면의 모든 카드에 적용되고, 학습 화면에도 그대로 반영돼요.', 'Applies to this side of every card and carries over to study mode.')}</p>
+    </aside>`;
   const badge = (index) => {
     const { found, missing } = imageStats[index];
     return `${found ? ` <span class="anki-badge">🖼 ${found}</span>` : ''}${missing ? ` <span class="anki-badge is-warn">⚠ ${missing}</span>` : ''}`;
@@ -1187,30 +1261,39 @@ function ankiImportHTML() {
               ${anki.deck.noteTypes.map((type) => `<option value="${esc(type.id)}"${type.id === anki.noteTypeId ? ' selected' : ''}>${esc(type.name)} (${type.noteCount})</option>`).join('')}
             </select>
           </label>
-          <label>${L('여러 필드를 합칠 때', 'When combining fields')}
-            <select data-anki-separator${disabled}>
-              <option value="newline"${anki.separator === 'newline' ? ' selected' : ''}>${L('줄바꿈', 'New line')}</option>
-              <option value="slash"${anki.separator === 'slash' ? ' selected' : ''}>/</option>
-              <option value="space"${anki.separator === 'space' ? ' selected' : ''}>${L('공백', 'Space')}</option>
-            </select>
-          </label>
         </div>
         <div class="anki-areas">
           ${areas.map(([area, title, description]) => `
             <fieldset class="anki-area"${disabled}>
               <legend>${title}</legend>
               <small>${description}</small>
-              ${noteType.fields.map((field, index) => `
-                <label><input type="checkbox" data-anki-area="${area}" value="${index}"${anki.mapping[area].includes(index) ? ' checked' : ''}> <span>${esc(field)}${badge(index)}</span></label>`).join('')}
+              ${[
+                ...anki.mapping[area],
+                ...noteType.fields.map((_, index) => index).filter((index) => !anki.mapping[area].includes(index)),
+              ].map((index) => {
+                const field = noteType.fields[index];
+                const position = anki.mapping[area].indexOf(index);
+                const checked = position >= 0;
+                const move = (direction, symbol, label, edge) => `<button type="button" class="anki-move" data-anki-move="${area}:${index}:${direction}" aria-label="${label}"${disabled}${edge ? ' disabled' : ''}>${symbol}</button>`;
+                return `
+                <div class="anki-field-row">
+                  <label><input type="checkbox" data-anki-area="${area}" value="${index}"${checked ? ' checked' : ''}> <span>${esc(field)}${badge(index)}</span></label>
+                  ${checked && anki.mapping[area].length > 1 ? `<span class="anki-move-group">${move(-1, '↑', L('위로 이동', 'Move up'), position === 0)}${move(1, '↓', L('아래로 이동', 'Move down'), position === anki.mapping[area].length - 1)}</span>` : ''}
+                </div>`;
+              }).join('')}
             </fieldset>`).join('')}
         </div>
         <p class="anki-count">${L(`가져올 항목 ${preview.total}개`, `${preview.total} items to import`)}</p>
+        <div class="anki-divider" role="separator"><span>${L('미리보기', 'Preview')}</span></div>
         <section class="anki-card-preview" aria-label="${L('학습 카드 미리보기', 'Flashcard preview')}">
-          ${previewFace}
-          <div class="anki-preview-navigation">
-            <button type="button" class="btn" data-anki-nav="-1"${disabled}${anki.previewIndex <= 0 ? ' disabled' : ''} aria-label="${L('이전 카드', 'Previous card')}">←</button>
-            <span aria-live="polite" aria-atomic="true">${preview.total ? `${anki.previewIndex + 1} / ${preview.total}` : '0 / 0'}</span>
-            <button type="button" class="btn" data-anki-nav="1"${disabled}${anki.previewIndex >= preview.total - 1 ? ' disabled' : ''} aria-label="${L('다음 카드', 'Next card')}">→</button>
+          ${previewSettings}
+          <div class="anki-preview-stage">
+            ${previewFace}
+            <div class="anki-preview-navigation">
+              <button type="button" class="btn" data-anki-nav="-1"${disabled}${anki.previewIndex <= 0 ? ' disabled' : ''} aria-label="${L('이전 카드', 'Previous card')}">←</button>
+              <span aria-live="polite" aria-atomic="true">${preview.total ? `${anki.previewIndex + 1} / ${preview.total}` : '0 / 0'}</span>
+              <button type="button" class="btn" data-anki-nav="1"${disabled}${anki.previewIndex >= preview.total - 1 ? ' disabled' : ''} aria-label="${L('다음 카드', 'Next card')}">→</button>
+            </div>
           </div>
         </section>
         <p class="anki-message${anki.error ? ' is-error' : ''}" role="status" data-anki-message>${esc(anki.error || anki.progress)}</p>
@@ -1251,9 +1334,15 @@ function attachAnkiDialog() {
   const overlay = appEl.querySelector('.anki-overlay');
   if (!anki || !overlay) return;
   hydrateAnkiPreviewImages(anki, overlay);
+  const dialog = overlay.querySelector('.anki-dialog');
+  if (anki.scrollTop) {
+    dialog.scrollTop = anki.scrollTop;
+    anki.scrollTop = 0;
+  }
   const refresh = (focus) => {
     anki.focus = focus;
     anki.error = '';
+    anki.scrollTop = dialog.scrollTop;
     render();
   };
   overlay.querySelector('[data-anki-type]').addEventListener('change', (event) => {
@@ -1264,35 +1353,77 @@ function attachAnkiDialog() {
     releaseAnkiPreviewUrls(anki);
     refresh('[data-anki-type]');
   });
-  overlay.querySelector('[data-anki-separator]').addEventListener('change', (event) => {
-    anki.separator = event.target.value;
-    anki.previewIndex = 0;
-    anki.previewFlipped = false;
-    releaseAnkiPreviewUrls(anki);
-    refresh('[data-anki-separator]');
-  });
   overlay.querySelectorAll('[data-anki-area]').forEach((box) => {
     box.addEventListener('change', () => {
       const area = box.dataset.ankiArea;
       const index = Number(box.value);
-      const next = new Set(anki.mapping[area]);
-      if (box.checked) next.add(index);
-      else next.delete(index);
-      anki.mapping[area] = [...next].sort((a, b) => a - b);
-      anki.previewIndex = 0;
-      anki.previewFlipped = false;
+      const next = anki.mapping[area].filter((item) => item !== index);
+      if (box.checked) next.push(index);
+      anki.mapping[area] = next;
       releaseAnkiPreviewUrls(anki);
       refresh(`[data-anki-area="${area}"][value="${index}"]`);
     });
   });
-  overlay.querySelector('[data-anki-flip]')?.addEventListener('click', () => {
+  overlay.querySelectorAll('[data-anki-move]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const [area, indexText, directionText] = button.dataset.ankiMove.split(':');
+      const index = Number(indexText);
+      const list = [...anki.mapping[area]];
+      const from = list.indexOf(index);
+      const to = from + Number(directionText);
+      if (from < 0 || to < 0 || to >= list.length) return;
+      [list[from], list[to]] = [list[to], list[from]];
+      anki.mapping[area] = list;
+      releaseAnkiPreviewUrls(anki);
+      refresh(`[data-anki-move="${button.dataset.ankiMove}"]`);
+    });
+  });
+  const flipCard = () => {
     anki.previewFlipped = !anki.previewFlipped;
     refresh('[data-anki-flip]');
+  };
+  const flipEl = overlay.querySelector('[data-anki-flip]');
+  flipEl?.addEventListener('click', flipCard);
+  flipEl?.addEventListener('keydown', (event) => {
+    if (event.target === flipEl && (event.key === ' ' || event.key === 'Enter')) {
+      event.preventDefault();
+      flipCard();
+    }
+  });
+  overlay.querySelector('[data-anki-hint-toggle]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    anki.previewHintOpen = !anki.previewHintOpen;
+    refresh('[data-anki-hint-toggle]');
+  });
+  [['font', 'data-anki-font'], ['image', 'data-anki-image']].forEach(([kind, attr]) => {
+    overlay.querySelectorAll(`[${attr}]`).forEach((input) => {
+      const side = anki.previewFlipped ? 'back' : 'front';
+      input.addEventListener('input', () => {
+        const value = setCardSize(side, kind, input.value);
+        input.nextElementSibling.textContent = kind === 'font' ? `${value}px` : String(value);
+        if (kind === 'font') {
+          overlay.querySelectorAll('.anki-preview-content, .anki-preview-hint').forEach((el) => {
+            el.style.fontSize = ankiFontSize(value);
+          });
+        }
+      });
+      input.addEventListener('change', () => { saveStudySettings(); });
+    });
+  });
+  overlay.querySelectorAll('[data-anki-setting]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const setting = input.dataset.ankiSetting;
+      state.studySettings[setting] = input.checked;
+      if (input.checked && setting === 'swapKeyValue') state.studySettings.randomizeKeyValue = false;
+      await saveStudySettings();
+      refresh();
+    });
   });
   overlay.querySelectorAll('[data-anki-nav]').forEach((button) => {
     button.addEventListener('click', () => {
       anki.previewIndex += Number(button.dataset.ankiNav);
       anki.previewFlipped = false;
+      anki.previewHintOpen = false;
       releaseAnkiPreviewUrls(anki);
       refresh(`[data-anki-nav="${button.dataset.ankiNav}"]`);
     });
@@ -1312,7 +1443,7 @@ function attachAnkiDialog() {
   });
   const target = (anki.focus && overlay.querySelector(`${anki.focus}:not(:disabled)`)) || overlay.querySelector('[data-anki-confirm]');
   anki.focus = '';
-  target?.focus();
+  target?.focus({ preventScroll: true });
 }
 
 async function confirmAnkiImport() {
@@ -1330,7 +1461,7 @@ async function confirmAnkiImport() {
   try {
     const images = new Map();
     const result = await buildAnkiRows(anki.deck, anki.noteTypeId, anki.mapping, {
-      separator: anki.separator,
+      separator: 'newline',
       saveImage: async (blob) => {
         const processed = await processImage(blob);
         images.set(processed.id, processed.blob);
@@ -2964,18 +3095,9 @@ function studySettingsHTML() {
   return `
     <div class="study-settings-panel" id="studySettingsPanel" aria-label="${L('학습 설정', 'Study Setting')}">
       <section class="study-setting-card">
-        <h2>${L('카드 글자 크기', 'Card text size')}</h2>
-        <label class="study-font-setting">
-          <span>${L('앞면', 'Front')}</span>
-          <input type="range" min="18" max="120" step="1" data-study-font-size="front" value="${settings.fontSizes.front}" aria-label="${L('앞면 글자 크기', 'Front text size')}">
-          <output data-study-font-size-value="front">${settings.fontSizes.front}px</output>
-        </label>
-        <label class="study-font-setting">
-          <span>${L('뒷면', 'Back')}</span>
-          <input type="range" min="16" max="72" step="1" data-study-font-size="back" value="${settings.fontSizes.back}" aria-label="${L('뒷면 글자 크기', 'Back text size')}">
-          <output data-study-font-size-value="back">${settings.fontSizes.back}px</output>
-        </label>
-        <p class="study-font-setting-note">${L('글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Long text automatically shrinks to fit the card.')}</p>
+        <h2>${currentStudySide() === 'front' ? L('카드 크기 · 앞면', 'Card size · Front') : L('카드 크기 · 뒷면', 'Card size · Back')}</h2>
+        ${cardSizeControlsHTML(currentStudySide(), 'study')}
+        <p class="study-font-setting-note">${L('지금 보고 있는 면의 모든 카드에 적용돼요. 글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Applies to this side of every card. Long text shrinks to fit the card.')}</p>
       </section>
       <section class="study-setting-card">
         <h2>${L('힌트 표시', 'Hint display')}</h2>
@@ -2985,10 +3107,6 @@ function studySettingsHTML() {
         <h2>${L('key-value 반전', 'Swap key and value')}</h2>
         <label class="study-hint-setting"><input type="checkbox" data-study-setting="swapKeyValue"${settings.swapKeyValue ? ' checked' : ''}> ${L('value를 앞면, key를 뒷면으로 학습', 'Show value on the front and key on the back')}</label>
         <label class="study-hint-setting"><input type="checkbox" data-study-setting="randomizeKeyValue"${settings.randomizeKeyValue ? ' checked' : ''}> ${L('카드마다 key-value 방향을 무작위로 학습', 'Randomize key-value direction for each card')}</label>
-      </section>
-      <section class="study-setting-card">
-        <h2>${L('이미지 크기', 'Image size')}</h2>
-        ${imageSizeControlHTML('study')}
       </section>
       <details class="study-setting-card study-shortcuts"${state.studyShortcutsOpen ? ' open' : ''}>
         <summary>${L('키보드 단축키', 'Keyboard shortcuts')}</summary>
@@ -3078,12 +3196,10 @@ function studyHTML() {
       <aside class="study-sidebar" aria-label="${L('학습 설정','Study Setting')}">
         <div class="study-sidebar-topbar">
           <h1 class="study-settings-title">${L('학습 설정','Study Setting')}</h1>
-          <button type="button" id="collapseStudySidebarBtn" class="study-sidebar-collapse" aria-label="${L('학습 설정 접기','Collapse Study Setting panel')}" title="${L('학습 설정 접기','Collapse Study Setting panel')}">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.49.49 0 0 0-.61.22L2.63 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.05.3-.08.62-.08.94s.03.64.08.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.21.37.3.61.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54c.04.24.24.42.49.42h3.84c.25 0 .45-.18.49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96c.23.09.49-.01.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.01-1.56ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/>
-            </svg>
-          </button>
         </div>
+        <button type="button" id="collapseStudySidebarBtn" class="study-sidebar-collapse" aria-label="${L('학습 설정 접기','Collapse Study Setting panel')}" title="${L('학습 설정 접기','Collapse Study Setting panel')}">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <div class="study-sidebar-content">
           ${studySettingsHTML()}
         </div>
@@ -4688,21 +4804,19 @@ function attachStudy() {
     });
   });
 
-  appEl.querySelectorAll('[data-study-font-size]').forEach((input) => {
-    const update = () => {
-      const side = input.dataset.studyFontSize;
-      const size = Number(input.value);
-      state.studySettings.fontSizes[side] = size;
-      const output = appEl.querySelector(`[data-study-font-size-value="${side}"]`);
-      if (output) output.textContent = `${size}px`;
-      fitStudyCardText();
-    };
-    input.addEventListener('input', update);
-    input.addEventListener('change', async () => {
-      update();
-      if (!(await saveStudySettings())) {
-        render();
-      }
+  [['font', 'data-study-font'], ['image', 'data-study-image']].forEach(([kind, attr]) => {
+    appEl.querySelectorAll(`[${attr}]`).forEach((input) => {
+      const update = () => {
+        const side = currentStudySide();
+        const value = setCardSize(side, kind, input.value);
+        input.nextElementSibling.textContent = kind === 'font' ? `${value}px` : String(value);
+        fitStudyCardText();
+      };
+      input.addEventListener('input', update);
+      input.addEventListener('change', async () => {
+        update();
+        if (!(await saveStudySettings())) render();
+      });
     });
   });
 
