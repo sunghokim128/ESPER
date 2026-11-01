@@ -38,7 +38,7 @@ import {
   reviewFsrsCard,
   saveFsrsData,
   synchronizeFsrsProject,
-} from './lib/fsrs.js';
+} from './lib/fsrs.js?v=2';
 import {
   deleteProjectRecord,
   createProjectDirectory,
@@ -59,12 +59,14 @@ import {
   saveWorkbookDirectory,
   writeProjectWorkbook,
   readProjectWorkbook,
-  saveProjectOrder,
+  saveProjectOrder as saveProjectOrderRecord,
+  readLibraryFile,
+  writeLibraryFile,
   saveStudySettings as saveStudySettingsToStore,
   readStudyRecordFile,
   writeStudyRecordFile,
-} from './lib/projectStore.js';
-import { recoverWorkbookProjects } from './lib/projectRecovery.js';
+} from './lib/projectStore.js?v=2';
+import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=2';
 
 const EDIT_COLUMN_WIDTHS_KEY = 'esper.editColumnWidths.v1';
 const DEFAULT_STUDY_SETTINGS = {
@@ -77,6 +79,7 @@ const DEFAULT_STUDY_SETTINGS = {
   imageSizes: { study: 55, a4: 'medium', status: 'medium' },
   imageHeights: { front: 55, back: 55 },
   a4ImageHeight: 14,
+  retentionStyle: { color: '#8f3f26', strength: 40, half: 70 },
   shortcuts: {
     flip: 'Space',
     hint: 'ArrowDown',
@@ -221,8 +224,7 @@ appEl.addEventListener('dragover', (event) => {
   });
   const rect = card.getBoundingClientRect();
   const deltaX = (event.clientX - rect.left - rect.width / 2) / rect.width;
-  const deltaY = (event.clientY - rect.top - rect.height / 2) / rect.height;
-  const insertAfter = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX > 0 : deltaY > 0;
+  const insertAfter = deltaX > 0;
   card.classList.add(insertAfter ? 'is-drop-after' : 'is-drop-before');
 });
 appEl.addEventListener('drop', (event) => {
@@ -326,6 +328,7 @@ const state = {
   studySaving: false,
   studyRecords: null,
   studyCalendarMonth: '',
+  studyLogView: 'calendar',
   studyRecordsOpen: { sessions: false, keys: false },
   studyRecordsLoading: false,
   studyRecordsError: '',
@@ -414,7 +417,18 @@ function normalizeStudySettings(settings) {
       normalizeStudyImageHeight(settings?.imageHeights?.[side] ?? settings?.imageSizes?.study),
     ])),
     a4ImageHeight: normalizeA4ImageHeight(settings?.a4ImageHeight ?? settings?.imageSizes?.a4),
+    retentionStyle: normalizeRetentionStyle(settings?.retentionStyle),
     shortcuts,
+  };
+}
+
+function normalizeRetentionStyle(style) {
+  const defaults = DEFAULT_STUDY_SETTINGS.retentionStyle;
+  const clamp = (value, min, max, fallback) => (Number.isFinite(Number(value)) ? Math.round(Math.min(max, Math.max(min, Number(value)))) : fallback);
+  return {
+    color: /^#[0-9a-f]{6}$/i.test(style?.color || '') ? style.color.toLowerCase() : defaults.color,
+    strength: clamp(style?.strength, 5, 100, defaults.strength),
+    half: clamp(style?.half, 5, 95, defaults.half),
   };
 }
 
@@ -486,16 +500,26 @@ function applyImageSizes() {
   document.documentElement.style.setProperty('--study-img-h-front', String(heights.front));
   document.documentElement.style.setProperty('--study-img-h-back', String(heights.back));
   document.documentElement.style.setProperty('--a4-img-h', `${state.studySettings.a4ImageHeight}mm`);
+  const retentionColor = state.studySettings.retentionStyle.color;
+  document.documentElement.style.setProperty('--retention-rgb', [1, 3, 5].map((i) => parseInt(retentionColor.slice(i, i + 2), 16)).join(', '));
   IMAGE_SIZE_VIEWS.filter((view) => view !== 'study' && view !== 'a4').forEach((view) => {
     document.documentElement.dataset[`img${view[0].toUpperCase()}${view.slice(1)}`] = sizes[view];
   });
 }
 
 // 기억률이 낮을수록 카드가 눈에 띄게 흐려지도록 곡선을 가파르게 잡습니다.
+// 기억 확률 100%에서 절대 투명도(strength)가 되고, 'half' 지점에서 절반이 되며,
+// 그 간격만큼 내려갈 때마다 다시 절반이 되는 반감기 곡선입니다.
+function retentionRelative(probability, half) {
+  const p = Math.max(0, Math.min(1, probability));
+  return 2 ** (-(1 - p) / (1 - half / 100));
+}
+
 function applyRetentionOpacity(card, probability) {
-  const intensity = Math.max(0, Math.min(1, (probability - 0.4) / 0.6));
-  card.style.setProperty('--retention-opacity', (0.03 + intensity * 0.37).toFixed(2));
-  card.style.setProperty('--retention-content-opacity', (0.1 + 0.9 * intensity ** 2).toFixed(2));
+  const { strength, half } = state.studySettings.retentionStyle;
+  const relative = retentionRelative(probability, half);
+  card.style.setProperty('--retention-opacity', Math.max(0.02, (strength / 100) * relative).toFixed(3));
+  card.style.setProperty('--retention-content-opacity', (0.15 + 0.85 * relative).toFixed(2));
 }
 
 function currentStudySide() {
@@ -893,6 +917,27 @@ async function save() {
   }
 }
 
+// The save folder keeps a copy of the project order and colors so they survive changing folders.
+async function persistLibrary(ids = state.projects.map((project) => project.id)) {
+  const byId = new Map(state.projects.map((project) => [project.id, project]));
+  const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+  try {
+    await writeLibraryFile({
+      version: 1,
+      order: ordered.map((project) => project.name),
+      colors: Object.fromEntries(ordered.map((project) => [project.name, project.cartridgeColorIndex ?? 0])),
+      retentionStyle: state.studySettings.retentionStyle,
+    });
+  } catch (error) {
+    console.error('Could not write the library file.', error);
+  }
+}
+
+async function saveProjectOrder(ids) {
+  await saveProjectOrderRecord(ids);
+  await persistLibrary(ids);
+}
+
 async function load() {
   try {
     state.projects = await listProjects();
@@ -907,6 +952,8 @@ async function load() {
     if (savedLanguage) setLanguageValue(savedLanguage);
     else setLanguageValue(Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Seoul' ? 'ko' : 'en');
     state.studySettings = normalizeStudySettings(await getStudySettings());
+    const library = await readLibraryFile();
+    if (library?.retentionStyle) state.studySettings.retentionStyle = normalizeRetentionStyle(library.retentionStyle);
     const savedDirectory = await getStoredWorkbookDirectory();
     state.directoryHandle = savedDirectory;
     const directory = await getWorkbookDirectory();
@@ -1593,6 +1640,7 @@ async function openProject(id, destination = 'study') {
 }
 
 async function recoverProjectsFromFolder(directory) {
+  const library = await readLibraryFile();
   const knownIds = new Set(state.projects.map((project) => project.id));
   const knownNames = new Set(state.projects.map((project) => projectNameKey(project.name)));
   const recovery = await recoverWorkbookProjects(
@@ -1606,11 +1654,17 @@ async function recoverProjectsFromFolder(directory) {
     return true;
   });
   for (const project of recoveredProjects) {
+    const color = library?.colors?.[project.name];
+    if (Number.isInteger(color) && color >= 0) project.cartridgeColorIndex = color;
     await saveProject(project);
   }
   if (recoveredProjects.length) {
     const projects = await listProjects();
-    const order = await getProjectOrder();
+    const savedNames = Array.isArray(library?.order) ? library.order : [];
+    const idByName = new Map(projects.map((project) => [project.name, project.id]));
+    const order = savedNames.length
+      ? savedNames.map((name) => idByName.get(name)).filter(Boolean)
+      : await getProjectOrder();
     const projectById = new Map(projects.map((project) => [project.id, project]));
     state.projects = [
       ...order.map((id) => projectById.get(id)).filter(Boolean),
@@ -1628,7 +1682,7 @@ async function resetProjectsForDirectory() {
   state.projects = [];
   state.projectOrder = [];
   state.project = null;
-  await saveProjectOrder([]);
+  await saveProjectOrderRecord([]);
 }
 
 async function prepareWorkbookDirectory(directory) {
@@ -2588,12 +2642,11 @@ function headerHTML() {
       ${showGlobalNav ? `<nav class="global-nav" aria-label="${L('주요 페이지','Main pages')}">
         <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습하기','Study')}</button>
         <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습 상태','Learning status')}</button>
-        <button type="button" data-global-nav="progress"${activePage === 'progress' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('나의 기록','My Log')}</button>
         <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>A4 view</button>
       </nav>` : ''}
       <div class="site-head-right">
         <a class="how-to-use-link" href="${TUTORIAL_PAGE_URL}" target="_blank" rel="noopener noreferrer">${L('튜토리얼', 'Tutorial')}</a>
-        <a class="how-to-use-link" href="${SHARED_DECKS_URL}" target="_blank" rel="noopener noreferrer">Shared Decks</a>
+        <a class="how-to-use-link" href="${SHARED_DECKS_URL}" target="_blank" rel="noopener noreferrer">${L('공유 덱', 'Shared Decks')}</a>
         ${workspaceActions}
         ${languageSelectHTML()}
       </div>
@@ -3092,31 +3145,32 @@ function retentionWarningHTML(percent, attr) {
   return `<p class="retention-warning" ${attr} role="status" hidden>${retentionWarningText()}</p>`;
 }
 
+function examDdayLabel() {
+  const date = parseLocalDate(projectPlan().examDate);
+  if (!date) return L('시험일 미설정', 'No exam date');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000);
+  return days === 0 ? 'D-Day' : days > 0 ? `D-${days}` : `D+${-days}`;
+}
+
 async function refreshExamSummary() {
-  const elements = [...appEl.querySelectorAll('[data-exam-summary]')];
+  const elements = [...appEl.querySelectorAll('[data-exam-retention]')];
   if (!elements.length) return;
   const { examDate, desiredRetention } = projectPlan();
-  const set = (text) => elements.forEach((element) => { element.textContent = text; });
-  if (!examDate) {
-    set(L('시험 날짜가 설정되지 않았어요.', 'No exam date set.'));
+  const set = (text) => elements.forEach((element) => { if (element.isConnected) element.textContent = text; });
+  const examEnd = /^\d{4}-\d{2}-\d{2}$/.test(examDate || '') ? new Date(`${examDate}T23:59:59`) : null;
+  if (!examEnd) {
+    set('—');
     return;
   }
   const records = (state.fsrsData?.cards || []).filter((record) => record.archivedAt === null);
-  const examEnd = new Date(`${examDate}T23:59:59`);
   try {
     const summary = await summarizeExamReadiness(records, examEnd, desiredRetention);
     if (projectPlan().examDate !== examDate) return;
-    if (summary.daysLeft < 0) {
-      set(L('시험 날짜가 이미 지났어요. 날짜를 다시 지정해 주세요.', 'The exam date has passed. Please choose a new date.'));
-      return;
-    }
-    const average = summary.averageRetention === null ? '—' : `${Math.round(summary.averageRetention * 100)}%`;
-    set(L(
-      `D-${summary.daysLeft} · 시험일 예상 평균 기억률 ${average}`,
-      `D-${summary.daysLeft} · expected exam-day average ${average}`
-    ));
-  } catch (error) {
-    set(error instanceof Error ? error.message : String(error));
+    set(summary.daysLeft < 0 || summary.averageRetention === null ? '—' : `${Math.round(summary.averageRetention * 100)}%`);
+  } catch {
+    set('—');
   }
 }
 
@@ -3238,7 +3292,7 @@ function studyHTML() {
           <h1 class="study-settings-title">${L('학습 설정','Study Setting')}</h1>
         </div>
         <button type="button" id="collapseStudySidebarBtn" class="study-sidebar-collapse" aria-label="${L('학습 설정 접기','Collapse Study Setting panel')}" title="${L('학습 설정 접기','Collapse Study Setting panel')}">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="study-sidebar-content">
           ${studySettingsHTML()}
@@ -3309,7 +3363,7 @@ function studyCalendarHTML(sessions) {
     <section class="study-calendar" aria-label="${L('월간 학습 출석표','Monthly study attendance')}">
       <div class="study-cal-head">
         <button type="button" data-study-cal-move="-1" aria-label="${L('이전 달','Previous month')}">‹</button>
-        <strong>${L(`${year}년 ${month}월 · ${byDay.size}일 출석`,`${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year} · ${byDay.size} day${byDay.size === 1 ? '' : 's'} studied`)}</strong>
+        <strong>${L(`${year}년 ${month}월`,`${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year}`)}</strong>
         <button type="button" data-study-cal-move="1" aria-label="${L('다음 달','Next month')}">›</button>
       </div>
       <div class="study-cal-grid">
@@ -3317,6 +3371,61 @@ function studyCalendarHTML(sessions) {
         ${cells.join('')}
       </div>
     </section>`;
+}
+
+function studyContributionHTML(sessions) {
+  const byDate = new Map();
+  for (const session of sessions) {
+    const date = String(session.date).slice(0, 10);
+    const entry = byDate.get(date) || { items: 0, count: 0 };
+    entry.items += session.itemCount;
+    entry.count += 1;
+    byDate.set(date, entry);
+  }
+  const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 52 * 7 - end.getDay());
+  const max = Math.max(1, ...[...byDate.values()].map((entry) => entry.items));
+  const level = (items) => (items ? Math.min(4, Math.max(1, Math.ceil((items / max) * 4))) : 0);
+  const monthNames = L(['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'], ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+  const weeks = [];
+  let studiedDays = 0;
+  let lastMonth = -1;
+  let lastLabelAt = -99;
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 7)) {
+    const days = [];
+    for (let i = 0; i < 7; i += 1) {
+      const day = new Date(cursor);
+      day.setDate(day.getDate() + i);
+      if (day > end) { days.push('<span class="study-contrib-cell is-empty"></span>'); continue; }
+      const key = iso(day);
+      const entry = byDate.get(key);
+      if (entry) studiedDays += 1;
+      const label = entry
+        ? L(`${key} · ${entry.count}회차 · ${entry.items}항목`, `${key} · ${entry.count} rounds · ${entry.items} items`)
+        : L(`${key} · 학습 없음`, `${key} · no study`);
+      days.push(`<span class="study-contrib-cell level-${level(entry?.items || 0)}" title="${label}"></span>`);
+    }
+    const month = cursor.getMonth();
+    const showMonth = month !== lastMonth && weeks.length - lastLabelAt >= 3;
+    const monthLabel = showMonth ? monthNames[month] : '';
+    if (showMonth) lastLabelAt = weeks.length;
+    lastMonth = month;
+    weeks.push(`<div class="study-contrib-week"><span class="study-contrib-month">${monthLabel}</span>${days.join('')}</div>`);
+  }
+  return `
+    <section class="study-contrib" aria-label="${L('학습 기록 잔디','Study contribution graph')}">
+      <p class="study-contrib-title">${L(`최근 1년간 ${studiedDays}일 학습`, `${studiedDays} day${studiedDays === 1 ? '' : 's'} studied in the last year`)}</p>
+      <div class="study-contrib-scroll"><div class="study-contrib-grid"><div class="study-contrib-week study-contrib-days"><span class="study-contrib-month"></span>${L(['','월','','수','','금',''],['','Mon','','Wed','','Fri','']).map((d) => `<span class="study-contrib-day">${d}</span>`).join('')}</div>${weeks.join('')}</div></div>
+      <div class="study-contrib-legend">${L('적게', 'Less')} ${[0, 1, 2, 3, 4].map((n) => `<span class="study-contrib-cell level-${n}"></span>`).join('')} ${L('많이', 'More')}</div>
+    </section>`;
+}
+
+function studyLogViewToggleHTML() {
+  const views = [['calendar', L('월별', 'Monthly')], ['contrib', L('연별', 'Yearly')]];
+  return `<div class="study-log-view-toggle" role="group" aria-label="${L('기록 보기 방식', 'Log view')}">${views.map(([id, label]) => `<button type="button" data-study-log-view="${id}" class="${state.studyLogView === id ? 'is-active' : ''}" aria-pressed="${state.studyLogView === id}">${label}</button>`).join('')}</div>`;
 }
 
 function studyRecordsHTML() {
@@ -3334,7 +3443,9 @@ function studyRecordsHTML() {
     ${headerHTML()}
     <main class="study-records-screen">
       <header class="study-records-heading">
-        <p class="study-ready-eyebrow">${L('DAILY STREAK', 'DAILY STREAK')}</p>
+        <button type="button" class="study-records-back" data-global-nav="status" aria-label="${L('학습 상태로 돌아가기', 'Back to Learning status')}" title="${L('학습 상태로 돌아가기', 'Back to Learning status')}">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <h1>${L('나의 기록', 'My Log')}</h1>
         <p>${esc(state.project?.name || '')}</p>
       </header>
@@ -3344,7 +3455,8 @@ function studyRecordsHTML() {
           ? `<p class="study-error" role="alert">${esc(state.studyRecordsError)}</p>
              <button type="button" class="btn" data-study-records-retry>${L('다시 불러오기','Reload')}</button>`
           : records
-            ? `${studyCalendarHTML(records.sessions)}
+            ? `${studyLogViewToggleHTML()}
+              ${state.studyLogView === 'contrib' ? studyContributionHTML(records.sessions) : studyCalendarHTML(records.sessions)}
               <div class="study-records-summary">
                 <article><strong>${sessions.length}</strong><span>${L('회차','Rounds')}</span></article>
                 <article><strong>${totalItems}</strong><span>${L('총 학습 항목 수','Total items studied')}</span></article>
@@ -3372,6 +3484,52 @@ function studyRecordsHTML() {
               </details>`
             : `<p class="study-records-empty">${L('저장된 학습 기록 파일이 없어요.','No study record file saved yet.')}</p>`}
     </main>`;
+}
+
+function retentionStyleDialogHTML() {
+  const { color, strength, half } = state.studySettings.retentionStyle;
+  const percents = [100, 85, 70, 55, 40, 20, 0];
+  return `
+    <dialog class="retention-dialog" aria-labelledby="retentionDialogTitle">
+      <form method="dialog" class="retention-dialog-body">
+        <div class="retention-dialog-head">
+          <h2 id="retentionDialogTitle">${L('카드 투명도 설정', 'Card opacity')}</h2>
+          <button type="submit" class="fsrs-guide-close" aria-label="${L('닫기', 'Close')}">×</button>
+        </div>
+        <p class="retention-dialog-lead">${L(
+          '현재 기억 확률이 높을수록 카드가 진하게, 낮을수록 흐리게 보여요. 아래 샘플은 기억 확률별로 카드가 어떻게 보이는지 보여 줘요.',
+          'The higher the current recall probability, the more opaque the card. The samples below show how cards look at each probability.'
+        )}</p>
+        <div class="retention-preview" data-retention-preview>${percents.map((percent) => `
+          <div class="retention-swatch"><span class="retention-swatch-card" data-retention-swatch="${percent}"><b>${percent}%</b></span></div>`).join('')}
+        </div>
+        <div class="retention-field retention-color-field">
+          <span>${L('색상', 'Color')}</span>
+          <div class="retention-picker">
+            <button type="button" class="retention-color-swatch" data-retention-swatch-btn aria-haspopup="true" aria-expanded="false" aria-label="${L('색상 선택', 'Pick a color')}" style="background:${color}"></button>
+            <input type="text" class="retention-hex" data-retention-hex value="${color}" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#8f3f26" aria-label="HEX">
+            <div class="retention-picker-pop" data-retention-pop hidden>
+              <div class="retention-sv" data-retention-sv><i data-retention-sv-handle></i></div>
+              <input type="range" class="retention-hue" min="0" max="360" step="1" data-retention-hue aria-label="${L('색조', 'Hue')}">
+            </div>
+          </div>
+        </div>
+        </div>
+        <label class="retention-field"><span>${L('절대 투명도', 'Absolute opacity')}</span><input type="range" min="5" max="100" step="1" data-retention-strength value="${strength}" aria-label="${L('절대 투명도', 'Absolute opacity')}"><output data-retention-strength-out>${strength}%</output></label>
+        <p class="retention-hint">${L('높일수록 모든 카드가 전체적으로 진해져요.', 'Higher values make every card darker overall.')}</p>
+        <div class="retention-field retention-half-field">
+          <span>${L('상대 투명도', 'Relative opacity')}</span>
+          <div class="retention-half">
+            <div class="retention-half-bar" data-retention-half-bar><b data-retention-half-arrow>▲</b></div>
+            <div class="retention-half-scale"><span>100%</span><span>50%</span><span>0%</span></div>
+          </div>
+        </div>
+        <p class="retention-hint" data-retention-half-note></p>
+        <div class="retention-dialog-actions">
+          <button type="button" class="btn" data-retention-reset>${L('기본값으로', 'Reset')}</button>
+        </div>
+      </form>
+    </dialog>`;
 }
 
 function learningStatusHTML() {
@@ -3417,7 +3575,7 @@ function learningStatusHTML() {
       </header>
       <div class="learning-status-top">
       <details class="exam-plan-panel"${state.planPanelOpen ? ' open' : ''}>
-        <summary class="exam-plan-summary"><strong>${L('핵심 설정', 'Key settings')}</strong><span>${L('시험 날짜', 'Exam date')} ${projectPlan().examDate ? esc(formatExamDate(projectPlan().examDate)) : L('미설정', 'not set')}</span><span>${L('목표 기억률', 'Target retention')} ${Math.round(projectPlan().desiredRetention * 100)}%</span></summary>
+        <summary class="exam-plan-summary"><strong>${examDdayLabel()}</strong><span>${L('목표 암기율', 'Target retention')} ${Math.round(projectPlan().desiredRetention * 100)}%</span><span>${L('시험일 예상 암기율', 'Expected exam-day retention')} <b data-exam-retention>…</b></span></summary>
         <div class="exam-plan-controls">
           <div class="exam-plan-field">
             <span>${L('시험 날짜', 'Exam date')}</span>
@@ -3429,7 +3587,6 @@ function learningStatusHTML() {
           </label>
         </div>
         ${retentionWarningHTML(Math.round(projectPlan().desiredRetention * 100), 'data-retention-note')}
-        <p class="exam-plan-line" data-exam-summary></p>
         <div class="exam-plan-footer">
           <p class="exam-plan-hint">${L('저장하면 복습 중인 모든 카드의 다음 복습일이 새 기준으로 변경돼요.', 'Saving updates the next review date of all cards in review.')}</p>
           <div class="exam-plan-actions">
@@ -3440,8 +3597,13 @@ function learningStatusHTML() {
         </div>
         <p class="exam-plan-line" data-plan-status role="status"></p>
       </details>
-      <details class="fsrs-guide">
-        <summary>${L('FSRS-7이란?', 'What is FSRS-7?')}</summary>
+      <div class="learning-status-actions">
+        <button type="button" class="btn learning-status-action" data-global-nav="progress"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>${L('나의 기록','My Log')}</button>
+        <button type="button" class="btn learning-status-action" data-fsrs-guide-open aria-haspopup="dialog">${L('FSRS-7이란?', 'What is FSRS-7?')}</button>
+      </div>
+      <dialog class="fsrs-guide fsrs-guide-dialog" aria-label="${L('FSRS-7이란?', 'What is FSRS-7?')}">
+        <button type="button" class="fsrs-guide-close" data-fsrs-guide-close aria-label="${L('닫기', 'Close')}">×</button>
+        <h3>${L('FSRS-7이란?', 'What is FSRS-7?')}</h3>
         <p>${L('복습 기록으로 카드마다 기억 상태를 추적하고, 망각 곡선으로 다음 복습 시점을 정하는 간격 반복 알고리즘이에요.', 'A spaced-repetition algorithm that tracks each card’s memory state and uses a forgetting curve to schedule the next review.')}</p>
         <dl>
           <dt>${L('기억 확률', 'Recall probability')}</dt>
@@ -3452,7 +3614,7 @@ function learningStatusHTML() {
           <dd>${L('기억이 유지되는 기간(일). 클수록 천천히 잊어요.', 'How long the memory lasts, in days. Larger means slower forgetting.')}</dd>
         </dl>
         <p class="fsrs-guide-source">${L('출처', 'Source')}: <a href="https://github.com/open-spaced-repetition/ts-fsrs" target="_blank" rel="noopener noreferrer">ts-fsrs</a> · <a href="https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler" target="_blank" rel="noopener noreferrer">Free Spaced Repetition Scheduler</a></p>
-      </details>
+      </dialog>
       </div>
       <section class="learning-status-toolbar" aria-label="${L('카드 검색 및 필터', 'Search and filter cards')}">
         <label class="learning-status-search">
@@ -3462,7 +3624,9 @@ function learningStatusHTML() {
         <div class="learning-status-filters" role="group" aria-label="${L('학습 상태 필터', 'Learning status filter')}">
           ${filters.map(([id, label, count]) => `<button type="button" class="learning-status-filter${state.learningStatusFilters.includes(id) ? ' is-active' : ''}" data-learning-status-filter="${id}" aria-pressed="${state.learningStatusFilters.includes(id)}">${label}<span>${count}</span></button>`).join('')}
         </div>
+        <button type="button" class="btn learning-status-action retention-style-open" data-retention-style-open aria-haspopup="dialog">${L('투명도 설정', 'Opacity')}</button>
       </section>
+      ${retentionStyleDialogHTML()}
       <p class="learning-status-footnote">${L(
         '카드가 진할수록 현재 기억 확률이 높아요. 확률은 현재 시각 기준 추정치이며 매시간 갱신돼요. 카드를 눌러 자세한 정보를 확인하세요.',
         'More opaque cards indicate a higher current recall probability. Estimates update hourly and may differ from actual recall. Select a card for details.'
@@ -3516,6 +3680,7 @@ function learningStatusHTML() {
 
 function a4ViewHTML() {
   const itemCounts = a4ItemCounts();
+  const a4HasImage = state.pairs.some((pair) => /\[img:/.test(`${pair.key}\n${pair.value}\n${pair.hint ?? ''}`));
   return `
     ${headerHTML()}
     <main class="shell a4-view-screen${settingsCollapsed ? ' settings-collapsed' : ''}" style="--study-panel-width:${studyPanelWidth}px">
@@ -3542,9 +3707,9 @@ function a4ViewHTML() {
             <button type="button" id="toggleAllValuesBtn" class="btn a4-settings-control a4-values-toggle" aria-pressed="${state.showAllA4Values}" data-study-hint="${L('전체 value 보기','Show all values')}">${state.showAllA4Values ? L('전체 value 가리기','Hide all values') : L('전체 value 보기','Show all values')}</button>
             <button type="button" id="toggleAllHintsBtn" class="btn a4-settings-control" aria-pressed="false" data-study-hint="${L('전체 hint 보기','Show all hints')}">${L('전체 hint 보기','Show all hints')}</button>
             <button type="button" id="a4SwapBtn" class="btn a4-settings-control" aria-pressed="${state.studySettings.swapKeyValue}" data-study-hint="${L('key와 value의 앞뒤를 바꿔서 표시합니다.','Swap which side is shown as key and value.')}">${L('key-value 반전','Swap key-value')}</button>
-            <label class="study-font-setting a4-image-gauge">
+            <label class="study-font-setting a4-image-gauge${a4HasImage ? '' : ' is-disabled'}"${a4HasImage ? '' : ` title="${L('이미지가 없어요', 'No images in this deck')}"`}>
               <span>${L('이미지', 'Image')}</span>
-              <input type="range" min="${A4_IMAGE_HEIGHT_RANGE.min}" max="${A4_IMAGE_HEIGHT_RANGE.max}" step="1" id="a4ImageHeight" value="${state.studySettings.a4ImageHeight}" aria-label="${L('이미지 크기', 'Image size')}">
+              <input type="range"${a4HasImage ? '' : ' disabled'} min="${A4_IMAGE_HEIGHT_RANGE.min}" max="${A4_IMAGE_HEIGHT_RANGE.max}" step="1" id="a4ImageHeight" value="${state.studySettings.a4ImageHeight}" aria-label="${L('이미지 크기', 'Image size')}">
               <output>${state.studySettings.a4ImageHeight}</output>
             </label>
           </section>
@@ -4342,6 +4507,15 @@ async function saveProjectPlan(plan) {
   }
   const listed = state.projects.find((item) => item.id === project.id);
   if (listed && listed !== project) listed.plan = plan;
+  // Keep a copy in the project folder so it survives changing the study directory.
+  if (state.fsrsData) {
+    state.fsrsData.plan = { ...plan };
+    try {
+      await saveFsrsData(project, state.fsrsData);
+    } catch (error) {
+      console.error('Could not save the plan to the FSRS file.', error);
+    }
+  }
 }
 
 function projectSetupHTML() {
@@ -4453,6 +4627,7 @@ function attachLearningStatusPage() {
     try {
       const result = await rescheduleFsrsData(state.project, state.fsrsData, plan.desiredRetention, plan.examDate);
       await saveProjectPlan(plan);
+      result.data.plan = { ...plan };
       await saveFsrsData(state.project, result.data);
       state.fsrsData = result.data;
       state.learningStatusPlanMessage = L(`저장했어요. 복습 중인 카드 ${result.changed}개의 다음 복습일을 새 기준으로 변경했어요.`, `Saved. Updated the next review date of ${result.changed} card(s) in review to the new settings.`);
@@ -4543,6 +4718,12 @@ function attachLearningStatusPage() {
     });
     if (empty) empty.hidden = visibleCount > 0;
   };
+  const fsrsGuide = appEl.querySelector('.fsrs-guide-dialog');
+  appEl.querySelector('[data-fsrs-guide-open]')?.addEventListener('click', () => fsrsGuide?.showModal());
+  attachRetentionStyleDialog();
+  fsrsGuide?.addEventListener('click', (event) => {
+    if (event.target === fsrsGuide || event.target.closest('[data-fsrs-guide-close]')) fsrsGuide.close();
+  });
   search?.addEventListener('input', () => {
     state.learningStatusQuery = search.value;
     applyFilters();
@@ -4557,6 +4738,159 @@ function attachLearningStatusPage() {
     });
   });
   applyFilters();
+}
+
+function hexToHsv(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  return { h: (h * 60 + 360) % 360, s: max ? d / max : 0, v: max };
+}
+
+function hsvToHex({ h, s, v }) {
+  const f = (n) => {
+    const k = (n + h / 60) % 6;
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  return `#${[f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function attachRetentionStyleDialog() {
+  const dialog = appEl.querySelector('.retention-dialog');
+  if (!dialog) return;
+  const swatches = [...dialog.querySelectorAll('[data-retention-swatch]')];
+  const svBox = dialog.querySelector('[data-retention-sv]');
+  const svHandle = dialog.querySelector('[data-retention-sv-handle]');
+  const hueInput = dialog.querySelector('[data-retention-hue]');
+  const hexInput = dialog.querySelector('[data-retention-hex]');
+  let hsv = hexToHsv(state.studySettings.retentionStyle.color);
+  let currentColor = state.studySettings.retentionStyle.color;
+  const strengthInput = dialog.querySelector('[data-retention-strength]');
+  const halfBar = dialog.querySelector('[data-retention-half-bar]');
+  const halfArrow = dialog.querySelector('[data-retention-half-arrow]');
+  let half = state.studySettings.retentionStyle.half;
+  const apply = () => {
+    applyImageSizes();
+    swatches.forEach((swatch) => applyRetentionOpacity(swatch, Number(swatch.dataset.retentionSwatch) / 100));
+    dialog.querySelector('[data-retention-strength-out]').textContent = `${strengthInput.value}%`;
+    const rgb = getComputedStyle(document.documentElement).getPropertyValue('--retention-rgb').trim();
+    const stops = Array.from({ length: 11 }, (_, i) => `rgba(${rgb}, ${(retentionRelative(1 - i / 10, half) * 0.9).toFixed(3)}) ${i * 10}%`);
+    halfBar.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+    halfArrow.style.left = `${100 - half}%`;
+    dialog.querySelector('[data-retention-half-note]').textContent = L(
+      `화살표가 있는 ${half}% 지점에서 투명도가 절반이 되고, 그만큼 내려갈 때마다 다시 절반이 돼요. 왼쪽으로 옮기면 흐려지는 속도가 느려져요.`,
+      `Opacity is halved at the ${half}% mark, and halves again for every step down by the same distance. Drag the arrow to the right to fade faster.`
+    );
+    appEl.querySelectorAll('.learning-status-card:not([data-learning-status-card="new"])').forEach((card) => {
+      const percent = parseInt(card.querySelector('[data-fsrs-retrievability]')?.textContent || '', 10);
+      if (Number.isFinite(percent)) applyRetentionOpacity(card, percent / 100);
+    });
+  };
+  const paintPicker = () => {
+    svBox.style.backgroundColor = `hsl(${hsv.h}, 100%, 50%)`;
+    svHandle.style.left = `${hsv.s * 100}%`;
+    svHandle.style.top = `${(1 - hsv.v) * 100}%`;
+    swatchBtn.style.background = currentColor;
+    hueInput.value = String(Math.round(hsv.h));
+  };
+  const read = () => {
+    state.studySettings.retentionStyle = normalizeRetentionStyle({ color: currentColor, strength: strengthInput.value, half });
+    apply();
+  };
+  const pickColor = (next, { syncHex = true } = {}) => {
+    hsv = next;
+    currentColor = hsvToHex(hsv);
+    if (syncHex) hexInput.value = currentColor;
+    hexInput.classList.remove('is-invalid');
+    paintPicker();
+    read();
+  };
+  const swatchBtn = dialog.querySelector('[data-retention-swatch-btn]');
+  const pop = dialog.querySelector('[data-retention-pop]');
+  swatchBtn.addEventListener('click', () => {
+    pop.hidden = !pop.hidden;
+    swatchBtn.setAttribute('aria-expanded', String(!pop.hidden));
+    if (!pop.hidden) paintPicker();
+  });
+  dialog.addEventListener('click', (event) => {
+    if (!pop.hidden && !event.target.closest('.retention-picker')) {
+      pop.hidden = true;
+      swatchBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  const pickFromSv = (event) => {
+    const rect = svBox.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+    pickColor({ h: hsv.h, s: x, v: 1 - y });
+  };
+  svBox.addEventListener('pointerdown', (event) => {
+    svBox.setPointerCapture(event.pointerId);
+    pickFromSv(event);
+    const move = (moveEvent) => pickFromSv(moveEvent);
+    const up = () => {
+      svBox.removeEventListener('pointermove', move);
+      svBox.removeEventListener('pointerup', up);
+      save();
+    };
+    svBox.addEventListener('pointermove', move);
+    svBox.addEventListener('pointerup', up);
+  });
+  hueInput.addEventListener('input', () => pickColor({ ...hsv, h: Number(hueInput.value) }));
+  hueInput.addEventListener('change', () => save());
+  const save = async () => {
+    await saveStudySettings();
+    await persistLibrary();
+  };
+  strengthInput.addEventListener('input', read);
+  strengthInput.addEventListener('change', save);
+  const pickHalf = (event) => {
+    const rect = halfBar.getBoundingClientRect();
+    const x = Math.min(0.95, Math.max(0.05, (event.clientX - rect.left) / rect.width));
+    half = Math.round(100 - x * 100);
+    read();
+  };
+  halfBar.addEventListener('pointerdown', (event) => {
+    halfBar.setPointerCapture(event.pointerId);
+    pickHalf(event);
+    const up = () => {
+      halfBar.removeEventListener('pointermove', pickHalf);
+      halfBar.removeEventListener('pointerup', up);
+      save();
+    };
+    halfBar.addEventListener('pointermove', pickHalf);
+    halfBar.addEventListener('pointerup', up);
+  });
+  hexInput.addEventListener('input', () => {
+    const value = hexInput.value.trim().replace(/^#?/, '#');
+    const valid = /^#[0-9a-f]{6}$/i.test(value);
+    hexInput.classList.toggle('is-invalid', !valid);
+    if (valid) pickColor(hexToHsv(value.toLowerCase()), { syncHex: false });
+  });
+  hexInput.addEventListener('change', () => {
+    hexInput.value = currentColor;
+    hexInput.classList.remove('is-invalid');
+    save();
+  });
+  dialog.querySelector('[data-retention-reset]').addEventListener('click', () => {
+    const defaults = DEFAULT_STUDY_SETTINGS.retentionStyle;
+    strengthInput.value = defaults.strength;
+    half = defaults.half;
+    pickColor(hexToHsv(defaults.color));
+    save();
+  });
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  appEl.querySelector('[data-retention-style-open]')?.addEventListener('click', () => {
+    paintPicker();
+    apply();
+    dialog.showModal();
+  });
 }
 
 async function routeToProjectDestination(destination) {
@@ -4587,6 +4921,13 @@ async function navigateGlobalPage(destination) {
     return;
   }
   if (!state.project) return;
+  // Leaving an in-progress study round ends it (after confirmation).
+  if (destination !== 'study' && state.study?.started) {
+    const interim = destination === 'a4' ? 'a4' : 'learning-status';
+    await finishStudy(true, interim);
+    if (state.study) return;
+    if (destination === 'a4' || destination === 'status') return;
+  }
   if (destination === 'study') {
     if (!state.study) startStudy();
     else {
@@ -4605,6 +4946,8 @@ async function navigateGlobalPage(destination) {
 }
 
 function attachStudyRecords() {
+  const contribScroll = appEl.querySelector('.study-contrib-scroll');
+  if (contribScroll) contribScroll.scrollLeft = contribScroll.scrollWidth;
   if (studyTimerInterval) {
     window.clearInterval(studyTimerInterval);
     studyTimerInterval = null;
@@ -4616,6 +4959,12 @@ function attachStudyRecords() {
     });
   });
   appEl.onclick = (event) => {
+    const viewButton = event.target.closest('[data-study-log-view]');
+    if (viewButton) {
+      state.studyLogView = viewButton.dataset.studyLogView === 'contrib' ? 'contrib' : 'calendar';
+      render();
+      return;
+    }
     const calMove = event.target.closest('[data-study-cal-move]');
     if (calMove) {
       const now = new Date();
