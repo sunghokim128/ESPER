@@ -2396,6 +2396,7 @@ function languageChoiceHTML() {
 }
 
 const TUTORIAL_PAGE_URL = 'tutorial.html';
+const SHARED_DECKS_URL = 'https://github.com/sunghokim128/ESPER/discussions/categories/shared-decks';
 
 function headerHTML() {
   const projectsActive = ['home', 'workspace', 'edit'].includes(state.page);
@@ -2419,6 +2420,7 @@ function headerHTML() {
       </nav>` : ''}
       <div class="site-head-right">
         <a class="how-to-use-link" href="${TUTORIAL_PAGE_URL}" target="_blank" rel="noopener noreferrer">${L('튜토리얼', 'Tutorial')}</a>
+        <a class="how-to-use-link" href="${SHARED_DECKS_URL}" target="_blank" rel="noopener noreferrer">Shared Decks</a>
         ${workspaceActions}
         ${languageSelectHTML()}
       </div>
@@ -2596,13 +2598,15 @@ function folderConnectionHTML(compact = false) {
   const buttonLabel = hasLocation
     ? `${L('저장 위치', 'Save location')}: ${state.directoryName} · ${L('변경', 'Change')}`
     : L('저장 위치 선택', 'Choose save location');
-  const selectionButton = `<button type="button" id="connectFolderBtn" class="btn folder-location-button" title="${esc(buttonLabel)}">${esc(buttonLabel)}</button>`;
-  const warning = state.directoryName
-    ? `<span class="folder-location-warning">${L('이전에 저장한 내용을 불러오려면 같은 저장 위치를 선택해야 해요.', 'To load previously saved content, choose the same save location as before.')}</span>`
+  const warningText = L('이전에 저장한 내용을 불러오려면 같은 저장 위치를 선택해야 해요.', 'To load previously saved content, choose the same save location as before.');
+  const buttonTitle = hasLocation ? `${buttonLabel}. ${warningText}` : buttonLabel;
+  const selectionButton = `<button type="button" id="connectFolderBtn" class="btn folder-location-button" title="${esc(buttonTitle)}">${esc(buttonLabel)}</button>`;
+  const warning = state.directoryName && !compact
+    ? `<span class="folder-location-warning">${warningText}</span>`
     : '';
 
   return `
-    <div class="folder-connection${compact ? ' folder-connection-compact' : ''}${state.directoryAccessIssue ? ' has-issue' : ''}">
+    <div class="folder-connection${compact ? ' folder-connection-compact' : ''}${hasLocation ? ' has-location' : ''}${state.directoryAccessIssue ? ' has-issue' : ''}">
       ${issue}
       <div class="folder-connection-action">
         ${selectionButton}

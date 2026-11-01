@@ -4650,6 +4650,8 @@ body:has(.app-shell.workspace-page) {
 
 .site-head-right {
   justify-self: end;
+  flex-wrap: nowrap;
+  gap: 16px;
 }
 
 .site-head-tools {
@@ -4662,16 +4664,20 @@ body:has(.app-shell.workspace-page) {
 
 .site-head-right .folder-connection-compact {
   display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
   align-self: center;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 260px;
+  flex-direction: row;
+  gap: 0;
+  max-width: 320px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.site-head-right .folder-connection-action {
+  align-items: center;
 }
 
 .site-head-right .folder-location-issue {
@@ -4687,23 +4693,68 @@ body:has(.app-shell.workspace-page) {
 }
 
 .site-head-right .folder-connection-compact.has-issue {
-  align-items: center;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .site-head-right .folder-connection-compact .btn {
-  align-self: flex-end;
-  padding: 7px 12px;
-  font-size: 11px;
+  min-height: 36px;
+  align-self: center;
+  padding: 0 12px;
+  border-color: rgba(112, 82, 59, .16);
+  border-radius: 9px;
+  background: rgba(255, 254, 250, .72);
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.site-head-right .folder-connection-compact.has-location .btn::before {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #5e8b68;
+  content: "";
+}
+
+.site-head-right .folder-connection-compact .btn:hover {
+  border-color: rgba(112, 82, 59, .32);
+  background: #fffefa;
+  color: var(--ink);
 }
 
 .site-head-right .language-switch {
-  gap: 5px;
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(112, 82, 59, .16);
   font-size: 11px;
 }
 
 .site-head-right .language-select {
-  padding: 6px 8px;
+  min-height: 36px;
+  padding: 0 10px;
   font-size: 12px;
+}
+
+.site-head-right .how-to-use-link {
+  min-height: 36px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.site-head-right .how-to-use-link:hover,
+.site-head-right .how-to-use-link:focus-visible {
+  background: transparent;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .study-records-page .study-records-heading h1 {
@@ -5090,7 +5141,9 @@ body:has(.app-shell.workspace-page) {
   .workspace-page .site-head {
     padding: 10px 20px;
   }
+}
 
+@media (max-width: 760px) {
   .projects-header {
     grid-template-columns: 1fr;
   }
