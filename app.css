@@ -6629,7 +6629,7 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
   border-top: 0;
   border-bottom: 1px solid #e7e2d8;
 }
-.a4-view-screen .a4-settings-content .a4-settings-group:first-of-type { margin-top: 12px; border-top: 1px solid #e7e2d8; }
+.a4-view-screen .a4-settings-content .a4-settings-group:first-of-type { margin-top: 0; border-top: 0; padding-top: 4px; }
 .a4-view-screen .a4-settings-group h2 {
   margin: 0 0 4px;
   color: #8a7a68;
@@ -6808,9 +6808,520 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 
 /* Learning Status: 검색 · 필터 · 투명도 설정 */
 .learning-status-screen .learning-status-card { background-color: rgba(var(--retention-rgb, 143, 63, 38), var(--retention-opacity, .08)); }
+.learning-status-screen .learning-status-card[data-learning-status-card="new"] {
+  background-color: rgba(110, 112, 116, .14);
+  color: #77746f;
+}
+.learning-status-screen .learning-status-card[data-learning-status-card="new"] .learning-status-card-key {
+  opacity: .8;
+}
 .learning-status-toolbar { justify-content: flex-start; gap: 14px; }
 .learning-status-toolbar .learning-status-filters { justify-content: flex-start; }
 .learning-status-toolbar .retention-style-open { margin-left: auto; min-height: 40px; }
+.learning-status-view-switch {
+  display: flex;
+  width: fit-content;
+  gap: 4px;
+  margin: 0 0 12px auto;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f2eee7;
+}
+.learning-status-view-button {
+  min-height: 32px;
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.learning-status-view-button.is-active {
+  background: #8f3f26;
+  color: #fff;
+}
+.learning-status-view-button:focus-visible {
+  outline: 2px solid #b5573a;
+  outline-offset: 2px;
+}
+.learning-status-overview[hidden],
+.learning-status-detailed[hidden] { display: none; }
+.learning-status-overview {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 3px 12px rgba(48, 40, 31, .035);
+}
+.learning-status-overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+.learning-status-overview-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+.learning-status-overview-head h2 span {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.learning-status-overview-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.learning-status-legend {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.learning-status-legend i {
+  width: 58px;
+  height: 9px;
+  border: 1px solid rgba(80, 60, 45, .08);
+  background: linear-gradient(to right, rgba(var(--retention-rgb, 143, 63, 38), .02), rgba(var(--retention-rgb, 143, 63, 38), var(--retention-max-opacity, .4)));
+}
+.learning-status-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
+  gap: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.learning-status-tile {
+  display: block;
+  min-width: 0;
+  aspect-ratio: 1;
+  background-color: rgba(var(--retention-rgb, 143, 63, 38), var(--retention-opacity, .08));
+  transition: background-color .25s ease;
+}
+.learning-status-tile[data-learning-status-category="new"] { --retention-opacity: .08; }
+.learning-status-tile[data-learning-status-category="new"] {
+  background-color: rgba(110, 112, 116, .2);
+}
+.learning-status-overview-grid > .learning-status-empty { grid-column: 1 / -1; }
+.learning-status-screen .exam-plan-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px 22px;
+  padding: 2px 0;
+}
+.exam-plan-summary-title {
+  color: var(--ink);
+  font-weight: 700;
+}
+.exam-plan-dday,
+.exam-plan-summary-metric {
+  display: grid;
+  gap: 2px;
+}
+.exam-plan-dday small,
+.exam-plan-summary-metric small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.learning-status-screen .exam-plan-summary .exam-plan-dday strong,
+.learning-status-screen .exam-plan-summary .exam-plan-summary-metric b {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.learning-status-screen .exam-plan-summary .exam-plan-dday strong { color: #8f3f26; }
+.learning-status-screen .exam-plan-controls {
+  grid-template-columns: minmax(170px, 1fr) minmax(160px, 1fr) minmax(170px, .9fr) minmax(190px, 1.1fr);
+  align-items: start;
+  gap: 14px;
+}
+.learning-status-screen .exam-plan-controls .exam-plan-field > small {
+  font-size: 10.5px;
+}
+.exam-plan-daily-field { align-content: start; }
+.exam-plan-daily-field > small,
+.exam-plan-completion > small {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.exam-plan-number-input {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--soft);
+}
+.exam-plan-number-input input {
+  width: 84px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-number-input input:disabled { opacity: .68; }
+.exam-plan-completion strong {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-size: 14px;
+}
+@media (max-width: 900px) {
+  .learning-status-screen .exam-plan-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .learning-status-screen .exam-plan-summary {
+    flex-wrap: wrap;
+    gap: 10px 18px;
+  }
+}
+@media (max-width: 560px) {
+  .learning-status-screen .exam-plan-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .learning-status-overview { padding: 12px; }
+  .learning-status-overview-head { align-items: flex-start; }
+  .learning-status-legend { gap: 5px; font-size: 9.5px; }
+  .learning-status-legend i { width: 42px; }
+  .learning-status-view-switch { margin-left: 0; }
+}
+.learning-status-screen .exam-plan-summary {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 2px 32px 0 0;
+  cursor: pointer;
+}
+.learning-status-top summary::before {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  margin: 0;
+  color: var(--muted);
+}
+.exam-plan-summary-intro {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.exam-plan-summary-intro strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 750;
+}
+.exam-plan-summary-intro small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.exam-plan-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.learning-status-screen .exam-plan-summary .exam-plan-dday,
+.learning-status-screen .exam-plan-summary .exam-plan-summary-metric {
+  min-width: 0;
+  min-height: 56px;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(80, 60, 45, .08);
+  border-radius: 9px;
+  background: #f8f6f2;
+}
+.learning-status-screen .exam-plan-summary .exam-plan-dday small,
+.learning-status-screen .exam-plan-summary .exam-plan-summary-metric small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+.learning-status-screen .exam-plan-summary .exam-plan-dday strong,
+.learning-status-screen .exam-plan-summary .exam-plan-summary-metric b {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.exam-plan-edit-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.learning-status-screen .exam-plan-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fbfaf8;
+}
+.learning-status-screen .exam-plan-controls .exam-plan-field {
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+.learning-status-screen .exam-plan-controls .exam-plan-field > small {
+  color: var(--muted);
+  font-weight: 450;
+  line-height: 1.45;
+}
+.learning-status-screen .exam-plan-controls .date-picker {
+  width: 100%;
+  min-width: 0;
+}
+.learning-status-screen .exam-plan-controls input[type="range"] {
+  width: 100%;
+  accent-color: #8f3f26;
+}
+.learning-status-screen .exam-plan-controls .exam-plan-completion strong {
+  min-height: 34px;
+  font-size: 14px;
+}
+.learning-status-screen .exam-plan-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.learning-status-screen .exam-plan-hint {
+  flex: 1 1 360px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.learning-status-screen .exam-plan-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.learning-status-overview-groups {
+  display: grid;
+  gap: 16px;
+}
+.learning-status-overview-group h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.learning-status-overview-group h3 span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.learning-status-overview-group.is-new {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.learning-status-overview-group.is-new .learning-status-overview-grid {
+  background: #f3f2f0;
+}
+@media (max-width: 900px) {
+  .exam-plan-summary-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .learning-status-screen .exam-plan-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .exam-plan-summary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .learning-status-screen .exam-plan-controls {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+  .learning-status-screen .exam-plan-footer {
+    align-items: stretch;
+  }
+  .learning-status-screen .exam-plan-actions {
+    width: 100%;
+  }
+  .learning-status-screen .exam-plan-actions button {
+    flex: 1;
+  }
+}
+.learning-status-screen .exam-plan-controls {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 4px 16px;
+}
+.exam-plan-row {
+  display: grid;
+  grid-template-columns: minmax(170px, .7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 12px 20px;
+  min-height: 66px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.exam-plan-row:last-child { border-bottom: 0; }
+.exam-plan-row-label {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.exam-plan-dday-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.exam-plan-dday-controls > strong {
+  min-width: 62px;
+  color: #8f3f26;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-dday-controls > label {
+  display: grid;
+  gap: 5px;
+  min-width: min(250px, 100%);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.exam-plan-dday-controls .date-picker { width: 100%; }
+.exam-plan-retention-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.exam-plan-retention-current,
+.exam-plan-retention-target {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+}
+.exam-plan-retention-current > strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-retention-target { min-width: 0; }
+.exam-plan-retention-target .exam-plan-row-label strong {
+  margin-left: 5px;
+  color: #8f3f26;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-retention-target input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: #8f3f26;
+}
+.exam-plan-daily-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.exam-plan-recommended-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.exam-plan-recommended-toggle input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #8f3f26;
+}
+.exam-plan-daily-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.exam-plan-daily-value strong {
+  min-width: 2ch;
+  color: var(--ink);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.exam-plan-daily-value input {
+  width: 84px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-daily-value input[hidden] { display: none; }
+.exam-plan-row-help {
+  grid-column: 2;
+  margin-top: -6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.exam-plan-completion strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.exam-plan-completion > small {
+  grid-column: 2;
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+@media (max-width: 560px) {
+  .learning-status-screen .exam-plan-controls { padding: 2px 12px; }
+  .exam-plan-row,
+  .exam-plan-retention-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px 0;
+  }
+  .exam-plan-row-help { grid-column: 1; margin-top: -2px; }
+  .exam-plan-completion > small { grid-column: 1; margin-top: -4px; }
+  .exam-plan-daily-controls { justify-content: flex-start; }
+}
 .retention-dialog { width: min(480px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); box-shadow: 0 24px 60px rgba(60, 40, 20, .22); }
 .retention-dialog::backdrop { background: rgba(40, 28, 18, .35); }
 .retention-dialog-body { display: grid; gap: 14px; padding: 20px 22px 18px; }
@@ -6868,3 +7379,277 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .fsrs-guide-dialog dt { font-size: 14px; font-weight: 700; margin-top: 12px; }
 .fsrs-guide-dialog dd { margin: 3px 0 0; font-size: 13.5px; line-height: 1.65; color: var(--soft); }
 .fsrs-guide-dialog .fsrs-guide-note { margin: 16px 0 0; font-size: 12.5px; color: var(--soft); }
+
+/* Learning status plan: summary rows are the base view; opening adds editors only */
+.exam-plan-summary-rows { display: grid; gap: 0; width: 100%; }
+.exam-plan-sum-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
+.exam-plan-sum-row:last-child { border-bottom: 0; }
+.exam-plan-sum-row > span { font-size: 13px; opacity: .72; }
+.exam-plan-sum-row strong { font-size: 16px; display: inline-flex; align-items: baseline; gap: 6px; }
+.exam-plan-sum-row small { font-size: 11px; font-weight: 500; opacity: .65; }
+.exam-plan-panel[open] .exam-plan-summary { padding-bottom: 0; }
+.exam-plan-panel[open] .exam-plan-edit-hint,
+.exam-plan-panel .exam-plan-edit-hint,
+.exam-plan-panel [data-dday-value],
+.exam-plan-panel .exam-plan-retention-current,
+.exam-plan-panel .exam-plan-completion,
+.exam-plan-panel .exam-plan-row-help,
+.exam-plan-panel .exam-plan-daily-value > strong,
+.exam-plan-panel .exam-plan-daily-value > span { display: none; }
+.exam-plan-panel .exam-plan-controls { padding-top: 10px; border-top: 1px dashed var(--line, rgba(128,128,128,.3)); }
+
+/* Compact plan panel: don't stretch across the row */
+.learning-status-top { grid-template-columns: minmax(0, 340px) auto; justify-content: start; }
+.exam-plan-panel { max-width: 340px; }
+.exam-plan-sum-row { padding: 7px 0; gap: 12px; }
+@media (max-width: 720px) {
+  .learning-status-top { grid-template-columns: minmax(0, 1fr); }
+  .exam-plan-panel { max-width: none; }
+}
+
+/* Independent per-row editing */
+.exam-plan-rows { padding: 4px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.exam-plan-item { border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
+.exam-plan-item:last-of-type { border-bottom: 0; }
+.exam-plan-head { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.exam-plan-head > span { font-size: 13px; opacity: .72; }
+.exam-plan-head strong { font-size: 16px; display: inline-flex; align-items: baseline; gap: 6px; }
+.exam-plan-head small { font-size: 11px; font-weight: 500; opacity: .65; }
+.exam-plan-head:not(.exam-plan-head-static)::after { content: '✎'; order: 3; font-size: 12px; opacity: .35; margin-left: 2px; }
+.exam-plan-head:not(.exam-plan-head-static):hover::after,
+.exam-plan-item.is-editing .exam-plan-head::after { opacity: .9; }
+.exam-plan-head-static { cursor: default; }
+.exam-plan-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 0 10px; }
+.exam-plan-editor[hidden] { display: none; }
+.exam-plan-editor .exam-plan-field { flex: 1 1 160px; display: grid; gap: 4px; }
+.exam-plan-editor .exam-plan-actions { margin-left: auto; display: flex; gap: 6px; }
+.exam-plan-editor input[type="number"] { width: 72px; }
+.exam-plan-editor > small { flex: 1 1 100%; opacity: .65; }
+.exam-plan-rows .exam-plan-line:empty { display: none; }
+
+.plan-accent { color: #a45b40; font-style: normal; }
+
+/* Align values to a common start column */
+.exam-plan-head { display: grid; grid-template-columns: 10.5em minmax(0, 1fr) auto; align-items: baseline; column-gap: 12px; }
+.exam-plan-head > strong { justify-self: start; }
+.exam-plan-head-static { grid-template-columns: 10.5em minmax(0, 1fr); }
+.exam-plan-head::after { grid-column: 3; }
+.exam-plan-head > strong { white-space: nowrap; }
+
+.exam-plan-head { grid-template-columns: 9.5em minmax(0, 1fr) auto; column-gap: 4px; }
+.exam-plan-head-static { grid-template-columns: 9.5em minmax(0, 1fr); }
+.exam-plan-head > strong[data-dday-summary] { display: inline; }
+
+.learning-status-section-head { margin: 0 0 10px; }
+.learning-status-section-head h2 { margin: 0; color: var(--ink); font-size: 15px; }
+.learning-status-section-head h2 span { margin-left: 5px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.learning-status-section-head p { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.learning-status-view-switch { margin: 0 0 12px 0; }
+.learning-status-overview-head { justify-content: flex-start; }
+
+.learning-status-view-row { display: flex; align-items: center; gap: 14px; margin: 0 0 12px; }
+.learning-status-view-row .learning-status-view-switch { margin: 0; flex: none; }
+.learning-status-view-row .learning-status-section-head { margin: 0; min-width: 0; }
+@media (max-width: 720px) { .learning-status-view-row { flex-wrap: wrap; } }
+
+/* Simple view tiles: faint outline + instant tooltip */
+.learning-status-overview-grid { overflow: visible; }
+.learning-status-tile { position: relative; box-shadow: inset 0 0 0 1px rgba(80, 60, 45, .16); }
+.learning-status-tile:hover { z-index: 3; box-shadow: inset 0 0 0 1.5px rgba(80, 60, 45, .55); }
+.learning-status-tile::after {
+  content: attr(aria-label);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #33271f;
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+.learning-status-tile:hover::after { opacity: 1; visibility: visible; }
+
+.learning-status-section-title { margin: 26px 0 10px; }
+
+.learning-status-top { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+.learning-status-top .learning-status-actions { justify-self: end; }
+@media (max-width: 720px) { .learning-status-top { grid-template-columns: minmax(0, 1fr); } }
+
+/* My Log preview (status page) */
+.study-log-preview {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin: 26px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.study-log-preview-title { display: flex; align-items: center; gap: 6px; margin: 0; }
+.study-log-preview-title i { font-style: normal; font-size: 15px; letter-spacing: 0; transition: transform .15s ease; }
+.study-log-preview:hover .study-log-preview-title i { transform: translateX(3px); }
+.study-log-preview:focus-visible { outline: 2px solid #a45b40; outline-offset: 4px; border-radius: 10px; }
+.study-log-preview-body {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  transition: border-color .15s ease;
+}
+.study-log-preview:hover .study-log-preview-body { border-color: #a45b40; }
+.study-log-preview-empty { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12.5px; }
+.study-mini-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px; }
+.study-mini-head span { color: #a45b40; font-size: 11.5px; font-weight: 650; }
+.study-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.study-mini-weekday { color: var(--muted); font-size: 10px; text-align: center; }
+.study-mini-cell { display: grid; place-items: center; aspect-ratio: 1; border-radius: 4px; background: #f1ede6; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.study-mini-cell.is-empty { background: transparent; }
+.study-mini-cell.is-done { background: #2f8a58; color: #fff; font-weight: 650; }
+.study-mini-cell.is-today { box-shadow: inset 0 0 0 1.5px #a45b40; }
+.study-log-stats { display: grid; align-content: center; gap: 14px; }
+.study-log-stats > div { display: grid; gap: 2px; }
+.study-log-stats span { color: var(--muted); font-size: 12px; }
+.study-log-stats strong { color: #a45b40; font-size: 22px; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .study-log-preview-body { grid-template-columns: minmax(0, 1fr); } }
+
+/* My Log page: contribution graph + totals side by side */
+.study-records-overview { display: flex; align-items: stretch; gap: 16px; margin-bottom: 24px; }
+.study-records-overview .study-contrib { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.study-records-overview .study-log-stats-total { flex: none; min-width: 150px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+@media (max-width: 720px) { .study-records-overview { flex-direction: column; } }
+
+/* My Log sits to the right of the settings card, titled at heading level */
+.learning-status-top { grid-template-columns: minmax(0, 340px) minmax(0, 430px) minmax(0, 1fr); column-gap: 18px; }
+.learning-status-top .study-log-preview { position: relative; margin: 0; align-self: start; }
+.learning-status-top .study-log-preview-title { position: absolute; left: 0; bottom: calc(100% + 10px); white-space: nowrap; }
+.learning-status-top .study-log-preview-body { grid-template-columns: minmax(0, 190px) minmax(0, 1fr); height: 100%; }
+.learning-status-top .learning-status-actions { grid-column: 3; align-self: start; }
+@media (max-width: 960px) {
+  .learning-status-top { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+  .learning-status-top .learning-status-actions { grid-column: 1 / -1; justify-self: end; }
+}
+@media (max-width: 720px) {
+  .learning-status-top { grid-template-columns: minmax(0, 1fr); }
+  .learning-status-top .study-log-preview { margin-top: 28px; }
+  .learning-status-top .study-log-preview-title { position: static; margin-bottom: 8px; }
+}
+
+/* Header is identical on every page: brand · main nav · folder status */
+.site-head { grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr); }
+.site-head .folder-connection-compact { min-width: 0; }
+.site-head .folder-location-button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 960px) {
+  .site-head { grid-template-columns: 1fr auto; }
+  .site-head .global-nav { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+}
+
+/* Settings card and My Log card share the same height */
+.learning-status-top { align-items: stretch; }
+.learning-status-top .learning-status-actions { align-self: start; }
+.learning-status-top .study-log-preview { display: flex; align-self: stretch; }
+.learning-status-top .study-log-preview-body { flex: 1 1 auto; height: auto; }
+.learning-status-top .exam-plan-rows { display: flex; flex-direction: column; padding-block: 6px; }
+.learning-status-top .exam-plan-item { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; min-height: 44px; }
+.learning-status-top .exam-plan-head { padding: 10px 0; }
+
+.learning-status-top .study-log-preview-body { column-gap: 36px; }
+.learning-status-top .study-log-stats { padding-left: 4px; }
+
+.site-head:not(:has(.global-nav)) { grid-template-columns: minmax(0, 1fr) auto; }
+
+.study-log-preview.is-disabled { cursor: not-allowed; }
+.study-log-preview.is-disabled:hover .study-log-preview-body { border-color: var(--line); }
+.study-log-preview-empty.is-error { color: #b3261e; }
+.learning-status-top .study-log-preview-body:has(.is-error) { grid-template-columns: minmax(0, 1fr); align-content: center; }
+
+/* Folder access error sits under the button without growing the header */
+.site-head { position: relative; }
+.site-head-right .folder-connection-compact { position: relative; }
+.site-head-right .folder-connection-compact.has-issue { flex-direction: column; align-items: stretch; gap: 0; }
+.site-head-right .folder-location-issue {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
+  max-width: 320px;
+  text-align: right;
+  z-index: 30;
+}
+
+.site-head-right .folder-connection-compact.no-location .btn::before {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #d93025;
+  content: "";
+  animation: folder-dot-blink 1.2s ease-in-out infinite;
+}
+@keyframes folder-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) {
+  .site-head-right .folder-connection-compact.no-location .btn::before { animation: none; }
+}
+
+/* Home error: plain red text under the save-location button */
+.site-head-right .folder-connection-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: min(420px, 90vw);
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+  z-index: 30;
+}
+
+/* My Log: simple/detailed toggle inside the card header, not a link to another page */
+.study-log-preview { cursor: default; }
+.study-log-preview:hover .study-log-preview-body,
+.study-log-preview.is-disabled:hover .study-log-preview-body { border-color: var(--line); }
+.learning-status-top .study-log-preview-title { display: flex; align-items: center; gap: 12px; }
+.learning-status-top .study-log-preview-title .learning-status-view-switch { margin: 0; }
+.learning-status-top .study-log-preview { flex-direction: column; }
+.study-log-preview.is-disabled .learning-status-view-button { cursor: not-allowed; opacity: .55; }
+.study-log-preview.is-detailed .study-log-preview-body { display: flex; align-items: stretch; gap: 24px; padding: 16px 18px; }
+.study-log-preview.is-detailed .study-contrib { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; background: none; }
+.study-log-preview.is-detailed .study-log-stats-total { flex: none; min-width: 150px; padding-left: 24px; border-left: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .study-log-preview.is-detailed .study-log-preview-body { flex-direction: column; }
+  .study-log-preview.is-detailed .study-log-stats-total { padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+}
+
+/* My Log is its own section below the settings card: title, toggle under it, then content */
+.learning-status-top { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+.learning-status-top .learning-status-actions { grid-column: 2; justify-self: end; align-self: start; }
+.study-log-preview { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: 100%; margin: 0 0 28px; }
+.study-log-preview-title { position: static; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 0; }
+.study-log-preview-title .learning-status-view-switch { margin: 0; }
+.study-log-preview .study-log-preview-body { grid-template-columns: minmax(0, 260px) auto; column-gap: 48px; justify-content: start; }
+.study-log-preview .study-log-preview-body:has(.is-error) { grid-template-columns: minmax(0, 1fr); }
+.study-log-preview.is-detailed .study-log-preview-body { display: flex; }
+@media (max-width: 720px) { .study-log-preview .study-log-preview-body { grid-template-columns: minmax(0, 1fr); } }
+
+/* Section rhythm: settings · My Log · Card understanding */
+.learning-status-top { margin-bottom: 40px; }
+.study-log-preview { margin: 0 0 44px; gap: 12px; }
+.study-log-preview-title { gap: 12px; }
+.study-log-preview .study-log-preview-body { padding: 16px 20px; border-radius: 14px; }
+.study-log-preview.is-detailed .study-log-preview-body { padding: 18px 20px; }
+.learning-status-section-title { margin-top: 0; }

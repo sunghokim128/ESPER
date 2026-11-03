@@ -39,7 +39,17 @@ test('recovers projects from name-matched folders and reuses matching FSRS ident
   const recovered = await recoverWorkbookProjects(root, async (projectName, fileName) => {
     requestedProgress.push([projectName, fileName]);
     return projectName === 'Words'
-      ? JSON.stringify({ projectId: 'original-project-id', workbookFileName: fileName })
+      ? JSON.stringify({
+          projectId: 'original-project-id',
+          workbookFileName: fileName,
+          plan: {
+            examDate: '2026-12-03',
+            desiredRetention: 0.9,
+            dailyNewCards: 18,
+            useRecommendedDailyPace: false,
+            firstPassDeadline: '2026-11-27',
+          },
+        })
       : null;
   });
 
@@ -48,6 +58,13 @@ test('recovers projects from name-matched folders and reuses matching FSRS ident
   assert.equal(recovered.projects[0].id, 'original-project-id');
   assert.equal(recovered.projects[0].name, 'Words');
   assert.equal(recovered.projects[0].pairs[0].key, 'apple');
+  assert.deepEqual(recovered.projects[0].plan, {
+    examDate: '2026-12-03',
+    desiredRetention: 0.9,
+    dailyNewCards: 18,
+    useRecommendedDailyPace: false,
+    firstPassDeadline: '2026-11-27',
+  });
   assert.equal(recovered.projects[1].name, 'Science');
   assert.deepEqual(requestedProgress, [['Words', 'Words.xlsx'], ['Science', 'Science.csv']]);
   assert.deepEqual(recovered.errors, []);

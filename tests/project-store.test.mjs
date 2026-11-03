@@ -129,18 +129,21 @@ test('stores the workbook, FSRS data, and study record inside one project folder
     await createProjectDirectory('Words');
     await writeProjectWorkbook('Words', 'Words.xlsx', new Blob(['workbook']));
     await writeFsrsDataFile('Words', 'Words.xlsx', '{"projectId":"id"}');
-    await writeStudyRecordFile('Words', new Blob(['records']));
+    await writeStudyRecordFile('Words', { version: 1, sessions: [{ date: '2026-11-04', itemCount: 3, durationSeconds: 90 }] });
 
     assert.deepEqual([...root.entriesMap.keys()], ['Words']);
     const project = root.entriesMap.get('Words');
     assert.deepEqual([...project.entriesMap.keys()].sort(), [
-      'Words study record.xlsx',
+      'Words study record.json',
       'Words.json',
       'Words.xlsx',
     ]);
     assert.equal((await readProjectWorkbook('Words', 'Words.xlsx')).size, 8);
     assert.equal(await readFsrsDataFile('Words', 'Words.xlsx'), '{"projectId":"id"}');
-    assert.equal((await readStudyRecordFile('Words')).size, 7);
+    assert.deepEqual(await readStudyRecordFile('Words'), {
+      version: 1,
+      sessions: [{ date: '2026-11-04', itemCount: 3, durationSeconds: 90 }],
+    });
     await assert.rejects(createProjectDirectory('words'), /이미 있어요/);
 
     await removeProjectDirectory('Words');

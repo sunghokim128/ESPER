@@ -57,6 +57,21 @@ test('FSRS-7 review state and all four schedule previews come from ts-fsrs', asy
   assert.equal(record.card.state, FsrsState.Review);
 });
 
+test('FSRS project snapshots preserve the manual daily pace mode', async () => {
+  const plannedProject = {
+    ...project,
+    plan: {
+      examDate: '2026-12-03',
+      desiredRetention: 0.9,
+      dailyNewCards: 7,
+      useRecommendedDailyPace: false,
+      firstPassDeadline: '2026-11-27',
+    },
+  };
+  const result = await reconcileFsrsData(plannedProject, [pair('alpha')], null);
+  assert.deepEqual(result.data.plan, plannedProject.plan);
+});
+
 test('sync preserves identities through reordering and archives changed or deleted cards', async () => {
   const initial = await reconcileFsrsData(project, [pair('alpha'), pair('beta')], null);
   const firstIds = new Map(initial.pairs.map((item) => [item.key, item.id]));
