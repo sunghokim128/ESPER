@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="310" viewBox="0 0 760 310" role="img" aria-labelledby="title description">
+  <title id="title">Action potential flashcard example</title>
+  <desc id="description">The front of the flashcard asks about an action potential. After recalling the answer and flipping the card, the back shows the explanation and an optional diagram hint.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; }
+      .eyebrow { fill: #737b84; font-size: 13px; font-weight: 700; letter-spacing: 1.5px; }
+      .prompt { fill: #20252a; font-size: 23px; font-weight: 700; }
+      .answer { fill: #20252a; font-size: 18px; }
+      .caption { fill: #454b52; font-size: 14px; }
+      .arrow { fill: #6d747c; font-size: 18px; font-weight: 700; }
+      .axis { fill: #737b84; font-size: 8px; }
+      .label { fill: #454b52; font-size: 8px; }
+    </style>
+  </defs>
+  <rect x="14" y="18" width="330" height="252" rx="18" fill="#fff" stroke="#d8dde2" stroke-width="2"/>
+  <text x="34" y="52" class="eyebrow">FRONT: KEY</text>
+  <text x="179" y="153" text-anchor="middle" class="prompt">Action potential</text>
+  <rect x="128" y="220" width="102" height="32" rx="16" fill="#fff" stroke="#e6ddd3" stroke-width="1.5"/>
+  <text x="179" y="241" text-anchor="middle" class="caption">Show hint</text>
+
+  <text x="380" y="153" text-anchor="middle" class="arrow">FLIP →</text>
+
+  <rect x="416" y="18" width="330" height="252" rx="18" fill="#fff" stroke="#d8dde2" stroke-width="2"/>
+  <text x="436" y="52" class="eyebrow">BACK: VALUE + HINT</text>
+  <text x="436" y="97" class="answer">Na⁺ influx depolarizes;</text>
+  <text x="436" y="122" class="answer">K⁺ efflux repolarizes.</text>
+  <rect x="436" y="142" width="290" height="110" rx="9" fill="#f8f9fa"/>
+  <path d="M470 158v68h228" fill="none" stroke="#8b929a" stroke-width="1.2"/>
+  <path d="M471 208h226M471 180h226" fill="none" stroke="#e1e4e7" stroke-width="1" stroke-dasharray="3 4"/>
+  <path d="M474 208h54c9 0 11-2 15-10l17-26c5-8 9-8 13 1l12 29c5 11 12 14 21 14h90" fill="none" stroke="#8f3f26" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="448" y="165" class="axis">mV</text>
+  <text x="454" y="212" class="axis">−70</text>
+  <text x="479" y="242" class="label">Rest</text>
+  <text x="537" y="242" class="label">Depolarization</text>
+  <text x="640" y="242" class="label">Repolarization</text>
+</svg>

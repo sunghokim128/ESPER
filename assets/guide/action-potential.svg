@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="116" viewBox="0 0 280 116" role="img" aria-labelledby="title description">
+  <title id="title">Action potential</title>
+  <desc id="description">Membrane potential over time, showing resting state, depolarization, and repolarization.</desc>
+  <style>
+    text { font-family: Arial, sans-serif; }
+    .axis { fill: #737b84; font-size: 9px; }
+    .label { fill: #454b52; font-size: 9px; }
+  </style>
+  <path d="M34 12v78h232" fill="none" stroke="#8b929a" stroke-width="1.5"/>
+  <path d="M35 67h230M35 35h230" fill="none" stroke="#e1e4e7" stroke-width="1" stroke-dasharray="3 4"/>
+  <path d="M38 67h52c10 0 12-2 17-11l19-39c5-10 10-10 14 2l13 39c5 15 13 19 24 19h88" fill="none" stroke="#8f3f26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="5" y="18" class="axis">mV</text>
+  <text x="13" y="71" class="axis">−70</text>
+  <text x="20" y="39" class="axis">0</text>
+  <text x="70" y="105" class="label">Rest</text>
+  <text x="105" y="105" class="label">Depolarization</text>
+  <text x="188" y="105" class="label">Repolarization</text>
+</svg>
