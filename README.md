@@ -1,61 +1,68 @@
-# Welcome to ESPER!
-
 ## Introduction
+
 ESPER stands for **Excel-based Spaced-repetition Program for Efficient Retention**.<br>
 It is a spaced-repetition learning tool powered by FSRS-7, designed for people who want a simpler alternative to Anki's interface.<br>
-ESPER works for any kind of memorization that can be organized as key–value pairs, from vocabulary and formulas to scientific concepts and historical facts.<br>
-Import an existing workbook or Anki deck to get started without making flashcards one by one.<br>
-Supported imports: Excel workbooks (.xlsx, .xlsm), Anki decks (.apkg), and ESPER share files (.espr).
+ESPER works for anything you want to memorize in a key–value format, from vocabulary and formulas to scientific concepts and historical facts.<br>
+Import an existing workbook or Anki deck to get started without creating flashcards one by one.<br>
+Supported imports: Excel workbooks (`.xlsx`, `.xlsm`), Anki decks (`.apkg`), and ESPER share files (`.espr`).
 
----
+<br><br>
 
-## ESPER learning process
+## How to use ESPER
 
 1. **Open ESPER**<br>
-   Open ESPER in a current Chromium-based browser such as Chrome or Edge. Choose your interface language and a folder for saving projects.
+   Open [ESPER](https://sunghokim128.github.io/ESPER/) in a current Chromium-based browser such as Chrome or Edge.<br>
+   Choose your interface language and a folder for your projects.
 
-2. **Import study material.**<br>
-   Choose an Excel workbook, Anki deck, or ESPER `.espr` file. Anki decks are converted into ESPER workbooks.
+2. **Import your study material**<br>
+   Import an Excel workbook, Anki deck, or ESPER `.espr` file.<br>
+   Anki decks are converted into ESPER workbooks.
 
-3. **Set your study plan.**<br>
-   In Learning status, set an exam date and desired recall level for exam day. ESPER suggests a first-pass target at about 80% of the time remaining, leaving the final period for reviews. Use the recommended daily new-card amount or choose your own.
+3. **Set your study plan**<br>
+   In Learning status, set your exam date and the recall level you want to reach by then.<br>
+   ESPER recommends finishing your first pass at about 80% of the time remaining, leaving the final period for reviews.<br>
+   Follow the recommended number of new cards per day or set your own.
 
-4. **Study with active recall.**<br>
-   Try to remember the value before revealing it. Use a hint if needed, then rate your recall **Again**, **Hard**, **Good**, or **Easy**. FSRS-7 uses your ratings to schedule future reviews.
+4. **Study with active recall**<br>
+   Try to remember the value before revealing it.<br>
+   Use a hint if needed, then rate your recall **Again**, **Hard**, **Good**, or **Easy**.<br>
+   FSRS-7 uses your ratings to schedule future reviews.
 
-5. **Continue from your progress.**<br>
-   Return to the project for scheduled reviews and track your study activity in Learning status.
+5. **Keep learning**<br>
+   Return to your project for scheduled reviews and use Learning status to track your activity.
 
 ### Additional features
 
-- **A4 view:** Review multiple items in a printable layout. Use **Export to PDF** to print or save the view as a PDF.
-- **Learning status:** Review your study log and card understanding, and adjust your study plan.
+- **A4 view:** Review multiple items in a printable layout. Use **Export to PDF** to print or save it as a PDF.
+- **Learning status:** Check your study log and card understanding, and update your study plan.
 
----
+<br><br>
 
 ## Workbook format
 
-ESPER uses a simple three-column format. The first row is a header; study items begin on the next row.<br>
-The same format works for words, equations, scientific concepts, dates, and more.<br>
-Use the in-app **Format Guide** for help preparing a compatible workbook.
+ESPER uses a simple three-column format: The first row is a header, and study items start on the second row.<br>
+Use this format for vocabulary, equations, scientific concepts, dates, and more.<br>
+The in-app **Format Guide** can help you prepare a compatible workbook.
 
 - **Column A — Key:** The question, term, or concept to remember.
 - **Column B — Value:** The answer or information to recall.
 - **Column C — Hint:** Optional supporting information.
+<br>
 
 | Key | Value | Hint |
 |---|---|---|
 | Action potential | Na⁺ influx depolarizes; K⁺ efflux repolarizes. | ![Action potential diagram](./assets/guide/action-potential.svg) |
+<br>
 
-In the study card, the **Key** appears on the front. Try to recall the **Value**, then flip the card to reveal it. The **Hint** is available when you need extra help; it can include an image, as shown here.
+During study, the **Key** appears on the front of the card. Try to recall the **Value**, then flip the card to reveal it. You can show the **Hint** when you need extra help; hints can include images.
 
 ![Action potential study card front and back: recall the key, then flip to see the value and optional image hint](./assets/guide/action-potential-flashcard.svg)
 
----
+<br><br>
 
 ## Project file structure
 
-When you choose a save folder, ESPER organizes project files like this:
+Choose a save folder and ESPER will organize your projects like this:
 
 ```text
 chosen-folder/
@@ -67,42 +74,40 @@ chosen-folder/
     └── images/  (when the workbook uses images)
 ```
 
-- `study-workbook.xlsx` — your study material saved as a workbook. Anki decks are converted to `.xlsx`
-- `study-workbook.json` — FSRS card states and review history, plus the project's exam-planning settings.
+- `study-workbook.xlsx` — The study material. Anki decks are converted to `.xlsx`; imported Excel workbooks keep their supported file extension.
+- `study-workbook.json` — FSRS card states and review history, along with exam-planning settings.
 - `project-name study record.json` — My Log study-session summaries.
-- `images/` — images referenced by the workbook.
-- `esper-library.json` — project order, colors, and user preferences. The browser also keeps project-list details, some settings, and save-folder permission.
+- `images/` — Images used in the workbook.
+- `esper-library.json` — Project order, colors, and user preferences. Project-list details, some settings, and save-folder permission are also kept in the browser.
 
-The screenshots below show how projects appear in ESPER and how they are organized in the selected save folder:
+These screenshots show the project list and the corresponding folders on your device:
 
-**ESPER project list:** Each card represents a study project. The save-location indicator shows the connected folder.
+**ESPER project list** — Each card represents a study project. The save-location indicator shows the connected folder.
 
 ![ESPER project list with multiple study projects and a connected save location](./assets/readme/project-home.png)
 
-**Selected save folder:** The root contains `esper-library.json` and a separate folder for each project.
+**Selected save folder** — The root contains `esper-library.json` and a separate folder for each project.
 
 ![Selected ESPER save folder containing esper-library.json and project folders](./assets/readme/save-folder.png)
 
-**A project folder:** The workbook and its FSRS data are stored together. Current My Log records are saved as `project-name study record.json`; an extra `.xlsx` record visible in this example is not required by the current storage format.
+**A project folder** — The workbook and FSRS data are stored together. The current My Log file is `project-name study record.json`. The `.xlsx` record shown in the screenshot is not used by the current format.
 
 ![Example project folder containing its workbook and related data files](./assets/readme/project-folder.png)
 
-Keeping study files in a folder you choose gives you control over where they are stored and lets you back up or move the folder yourself.<br>
-ESPER does not upload study materials or progress to an ESPER account or sync them between devices.<br>
+Choose where your study files are stored, and copy or move the folder yourself when you need to back it up or transfer it.<br>
 Reconnect the same folder to continue your projects with their saved progress.<br>
-You can also choose different folders for separate sets of projects; each folder works like its own workspace, similar to having multiple accounts, but ESPER does not create or manage user accounts.
+You can use different folders as separate workspaces for different sets of projects. These workspaces may feel like separate accounts, but ESPER does not create or manage user accounts.
 
----
+<br><br>
 
 ## Data storage and privacy
 
-Study materials and progress stay in the save folder you choose; ESPER does not upload them to an ESPER server.<br>
-The app fetches its tutorial and guide assets from the ESPER site when needed.<br>
-External sites are contacted only when you choose to open their links, and their privacy policies then apply.
+ESPER fetches tutorial and guide assets from its website when needed.<br>
+Third-party sites are contacted only when you choose to open their links; their privacy policies apply when you visit them.
 
----
+<br><br>
 
 ## Acknowledgements
 
-ESPER uses [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) version 6.0.0, by [Open Spaced Repetition](https://github.com/open-spaced-repetition), to implement FSRS-7 scheduling.
-`ts-fsrs` is distributed under the MIT License; see [`vendor/ts-fsrs/LICENSE`](./vendor/ts-fsrs/LICENSE).
+ESPER uses [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) version 6.0.0 by [Open Spaced Repetition](https://github.com/open-spaced-repetition) to implement FSRS-7 scheduling.<br>
+`ts-fsrs` is distributed under the MIT License. See [`vendor/ts-fsrs/LICENSE`](./vendor/ts-fsrs/LICENSE).
