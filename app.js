@@ -8,7 +8,7 @@ import {
 } from './lib/parseSheet.js';
 import { normalizeColumnWidths, resizeAdjacentColumns } from './lib/columnSizing.js';
 import { indexStudyPairs } from './lib/studyPairs.js';
-import { AnkiImportError, buildAnkiRows, audioOnlyFields, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js?v=2';
+import { AnkiImportError, buildAnkiRows, audioOnlyFields, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js?v=3';
 import { configureImageDirectory, getImageBlob, getImageUrl, hydrateImages, processImage, releaseProjectImages, saveImageBlob, saveImageFile } from './lib/imageStore.js';
 import { createEsprBlob, readEsprFile, ESPR_EXTENSION } from './lib/projectShare.js';
 import { attachDatePicker, calendarMonthDays, isDatePickerEvent, localDateValue, parseLocalDate } from './lib/datePicker.js';
@@ -37,7 +37,7 @@ import {
   reviewFsrsCard,
   saveFsrsData,
   synchronizeFsrsProject,
-} from './lib/fsrs.js?v=6';
+} from './lib/fsrs.js?v=7';
 import {
   deleteProjectRecord,
   createProjectDirectory,
@@ -64,8 +64,8 @@ import {
   saveStudySettings as saveStudySettingsToStore,
   readStudyRecordFile,
   writeStudyRecordFile,
-} from './lib/projectStore.js?v=4';
-import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=5';
+} from './lib/projectStore.js?v=5';
+import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=6';
 import {
   DEFAULT_DAILY_NEW_CARDS,
   dailyNewCardPlan,
@@ -93,7 +93,7 @@ const DEFAULT_STUDY_SETTINGS = {
     hard: '2',
     good: '3',
     easy: '4',
-    previous: 'ArrowLeft',
+    undo: 'ArrowLeft',
     speak: 's',
     exit: 'Escape',
   },
@@ -106,7 +106,7 @@ const STUDY_ACTIONS = [
   ['good', 'Good'],
   ['easy', 'Easy'],
   ['speak', '발음 듣기'],
-  ['previous', '이전 카드'],
+  ['undo', '선택 되돌리기'],
   ['exit', '회차 종료'],
 ];
 const STUDY_ACTION_LABELS_EN = {
@@ -117,7 +117,7 @@ const STUDY_ACTION_LABELS_EN = {
   good: 'Good',
   easy: 'Easy',
   speak: 'Pronounce',
-  previous: 'Previous card',
+  undo: 'Undo rating',
   exit: 'Exit Study',
 };
 
@@ -330,6 +330,7 @@ const state = {
   editMessage: '',
   editMessageIsError: false,
   editFocus: null,
+  editHighlightRow: null,
   anki: null,
   editActiveCell: null,
   study: null,
@@ -343,11 +344,13 @@ const state = {
   logPreviewLoading: false,
   logPreviewError: '',
   logPreviewView: 'simple',
+  logSelectedDate: null,
+  logCalMonth: localDateForExport().slice(0, 7),
   learningStatusFilters: ['due', 'scheduled', 'new'],
   learningStatusPlanMessage: '',
-  planPanelOpen: false,
   learningStatusQuery: '',
   learningStatusView: 'simple',
+  collapsedSections: {},
 };
 
 const processingProjectIds = new Set();
@@ -396,7 +399,7 @@ function normalizeStudySettings(settings) {
   const savedShortcuts = settings?.shortcuts || {};
   const shortcuts = { ...DEFAULT_STUDY_SETTINGS.shortcuts };
   for (const [action] of STUDY_ACTIONS) {
-    const key = savedShortcuts[action];
+    const key = savedShortcuts[action] ?? (action === 'undo' ? savedShortcuts.previous : undefined);
     if (typeof key === 'string' && key.length > 0) shortcuts[action] = key;
   }
   const uniqueKeys = new Set(Object.values(shortcuts).map(shortcutKeyId));
@@ -567,19 +570,6 @@ function setCardSize(side, kind, rawValue) {
   settings.imageHeights[side] = normalizeStudyImageHeight(rawValue);
   applyImageSizes();
   return settings.imageHeights[side];
-}
-
-function imageSizeControlHTML(view) {
-  const labels = {
-    small: L('작게', 'Small'),
-    medium: L('보통', 'Medium'),
-    large: L('크게', 'Large'),
-    fill: L('꽉 차게', 'Fill'),
-  };
-  const current = state.studySettings.imageSizes[view];
-  return `<label class="image-size-control image-size-control-${view}"><span>${L('이미지 크기', 'Image size')}</span>
-    <select data-image-size="${view}">${IMAGE_SIZE_IDS.map((id) => `<option value="${id}"${id === current ? ' selected' : ''}>${labels[id]}</option>`).join('')}</select>
-  </label>`;
 }
 
 function closeProjectMenus() {
@@ -1842,7 +1832,7 @@ function applyEditColumnWidths(table, ratios) {
   });
 }
 
-async function editProject(id) {
+async function editProject(id, focusPairId = null) {
   if (processingProjectIds.has(id)) return;
   state.error = '';
   state.notice = '';
@@ -1883,7 +1873,13 @@ async function editProject(id) {
     state.editDirty = false;
     state.editMessage = '';
     state.editMessageIsError = false;
-    state.editFocus = null;
+    const focusPair = state.pairs.find((pair) => pair.id === focusPairId);
+    let focusRow = focusPair
+      ? rows.findIndex((row, index) => index > 0 && row[0] === focusPair.key && row[1] === focusPair.value && (row[2] ?? '') === focusPair.hint)
+      : -1;
+    if (focusPair && focusRow < 0) focusRow = Math.min(rows.length - 1, state.pairs.indexOf(focusPair) + 1);
+    state.editFocus = focusRow > 0 ? { row: focusRow, col: 0 } : null;
+    state.editHighlightRow = focusRow > 0 ? focusRow : null;
     state.editActiveCell = null;
     state.page = 'edit';
   } catch (error) {
@@ -1976,6 +1972,7 @@ async function leaveEditPage() {
   state.project = null;
   state.sourceFile = null;
   state.editRows = [];
+  state.editHighlightRow = null;
   state.editDirty = false;
   render();
   if (leaving && !leaving.pairs.length) {
@@ -2508,7 +2505,7 @@ function editHTML() {
   const columnLabels = L(EDIT_COLUMN_LABELS, EDIT_COLUMN_LABELS_EN);
   const saving = state.project ? processingProjectIds.has(state.project.id) : false;
   const body = state.editRows.map((row, rowIndex) => `
-    <tr class="${rowIndex === 0 ? 'is-header-row' : ''}">
+    <tr class="${rowIndex === 0 ? 'is-header-row' : ''}${rowIndex === state.editHighlightRow ? ' is-target-row' : ''}">
       <th scope="row" class="edit-row-number">
         <span>${rowIndex + 1}</span>
         ${rowIndex > 0 ? `<button type="button" class="edit-row-delete" data-edit-delete-row="${rowIndex}" aria-label="${L(`${rowIndex + 1}행 삭제`, `Delete row ${rowIndex + 1}`)}" title="${L('행 삭제', 'Delete row')}">×</button>` : ''}
@@ -3025,8 +3022,10 @@ async function refreshWorkspaceExamGauges() {
     try {
       const stored = await readFsrsDataFile(project.name, project.fileName);
       let cards = [];
+      let storedDailyProgress = null;
       if (stored !== null) {
         const data = JSON.parse(stored);
+        storedDailyProgress = data?.dailyProgress || null;
         if (
           data?.projectId !== project.id ||
           data?.workbookFileName !== project.fileName ||
@@ -3062,10 +3061,9 @@ async function refreshWorkspaceExamGauges() {
         `미복습 항목 ${newPercent}%`,
         `${newPercent}% unreviewed`
       ));
-      const dueCount = project.pairs.filter((pair) => {
-        const record = activeById.get(pair.id);
-        return !record || fsrsReviewCategory(record.card, now) !== 'scheduled';
-      }).length;
+      const projectRecords = project.pairs.map((pair) => activeById.get(pair.id)).filter(Boolean);
+      const dueReviews = reviewedCards.filter((record) => Date.parse(record.card.dueAt) <= now).length;
+      const dueCount = dueReviews + dailyNewAllowance(project, projectRecords, newCount, storedDailyProgress).availableNewCards;
       if (reviewCount) {
         reviewCount.textContent = L(`지금 복습할 항목 ${dueCount}개`, `${dueCount} ${dueCount === 1 ? 'item' : 'items'} to review now`);
         reviewCount.hidden = dueCount === 0;
@@ -3142,12 +3140,6 @@ function formatFsrsDuration(value, baseMs) {
   return L(`${years}년 뒤`, `in ${years} yr`);
 }
 
-function formatFsrsShortDate(value) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return L('날짜 없음', 'No date');
-  return new Intl.DateTimeFormat(language === 'ko' ? 'ko-KR' : 'en', { month: 'short', day: 'numeric' }).format(date);
-}
-
 function formatFsrsDate(value) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return L('날짜 없음', 'No date');
@@ -3155,16 +3147,6 @@ function formatFsrsDate(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
-}
-
-function fsrsStateLabel(card) {
-  const labels = {
-    new: L('새 카드', 'New'),
-    learning: L('학습 중', 'Learning'),
-    review: L('복습 중', 'Review'),
-    relearning: L('재학습 중', 'Relearning'),
-  };
-  return labels[card?.scheduleStatus] || L('FSRS 상태 확인 필요', 'Unknown FSRS state');
 }
 
 function formatStudyTime(milliseconds) {
@@ -3213,19 +3195,12 @@ function selectedDailyPace(plan, remainingCards, now = new Date()) {
   });
 }
 
-function currentDailyNewProgress() {
+function dailyNewAllowance(project, activeRecords, newCardCount, dailyProgress) {
   const today = localStudyDate();
-  const pairIds = new Set(state.pairs.map((pair) => pair.id));
-  const activeRecords = (state.fsrsData?.cards || []).filter((record) =>
-    record.archivedAt === null && pairIds.has(record.id)
-  );
   const learnedToday = new Set(activeRecords
-    .filter((record) => record.reviewLogs[0] && localStudyDate(new Date(record.reviewLogs[0].reviewTime)) === today)
+    .filter((record) => record.reviewLogs?.[0] && localStudyDate(new Date(record.reviewLogs[0].reviewTime)) === today)
     .map((record) => record.id));
-  const newCards = activeRecords.filter((record) => record.card.state === FsrsState.New);
-  const plan = projectPlan();
-  const pace = selectedDailyPace(plan, newCards.length);
-  const dailyProgress = state.fsrsData?.dailyProgress;
+  const pace = selectedDailyPace(projectPlan(project), newCardCount);
   const extraNewCards = dailyProgress?.date === today && Number.isInteger(dailyProgress.extraNewCards)
     ? Math.max(0, dailyProgress.extraNewCards)
     : 0;
@@ -3233,17 +3208,35 @@ function currentDailyNewProgress() {
   const allowance = canLearnNew ? pace.recommended + extraNewCards : 0;
   return {
     today,
-    learnedToday: learnedToday.size,
-    remainingNewCards: newCards.length,
+    learnedToday,
     extraNewCards,
     allowance,
-    recommended: pace.recommended,
-    completionDate: pace.completionDate,
-    isPastDeadline: pace.isPastDeadline,
+    pace,
+    canLearnNew,
+    availableNewCards: canLearnNew ? Math.min(newCardCount, Math.max(0, allowance - learnedToday.size)) : 0,
+  };
+}
+
+function currentDailyNewProgress() {
+  const pairIds = new Set(state.pairs.map((pair) => pair.id));
+  const activeRecords = (state.fsrsData?.cards || []).filter((record) =>
+    record.archivedAt === null && pairIds.has(record.id)
+  );
+  const newCards = activeRecords.filter((record) => record.card.state === FsrsState.New);
+  const daily = dailyNewAllowance(state.project, activeRecords, newCards.length, state.fsrsData?.dailyProgress);
+  return {
+    today: daily.today,
+    learnedToday: daily.learnedToday.size,
+    remainingNewCards: newCards.length,
+    extraNewCards: daily.extraNewCards,
+    allowance: daily.allowance,
+    recommended: daily.pace.recommended,
+    completionDate: daily.pace.completionDate,
+    isPastDeadline: daily.pace.isPastDeadline,
     newCards,
-    learnedIds: learnedToday,
-    availableNewCards: canLearnNew ? Math.min(newCards.length, Math.max(0, allowance - learnedToday.size)) : 0,
-    canOfferExtra: canLearnNew && newCards.length > 0 && learnedToday.size >= allowance,
+    learnedIds: daily.learnedToday,
+    availableNewCards: daily.availableNewCards,
+    canOfferExtra: daily.canLearnNew && newCards.length > 0 && daily.learnedToday.size >= daily.allowance,
   };
 }
 
@@ -3329,6 +3322,9 @@ function studySettingsHTML() {
         ${state.studyKeyError ? `<p class="study-settings-error" role="alert">${esc(state.studyKeyError)}</p>` : ''}
         <button type="button" class="study-reset-shortcuts" data-study-reset-shortcuts>${L('기본값으로 되돌리기', 'Reset to defaults')}</button>
       </details>
+      <div class="study-edit-card-row">
+        <button type="button" class="btn study-edit-card-button" data-study-action="edit-card"${state.study?.started && !state.studySaving ? '' : ' disabled'} title="${L('학습을 종료하고 기록을 저장한 뒤, 지금 보던 카드의 행을 편집 페이지에서 열어요.', 'Ends the round, saves its record, and opens this card\'s row on the edit page.')}">✎ ${L('카드 바로 수정', 'Edit this card')}</button>
+      </div>
     </div>`;
 }
 
@@ -3432,6 +3428,7 @@ function studyHTML() {
           ${cardMarkup}
         </section>
         ${pair ? `<div class="study-card-actions">
+          ${session.history.length && !state.pendingReview ? `<button type="button" class="btn study-undo-button" data-study-action="undo"${state.studySaving ? ' disabled' : ''} title="${esc(shortcutKeyLabel(state.studySettings.shortcuts.undo))}">↩ ${L('선택 되돌리기', 'Undo rating')}</button>` : ''}
           ${!session.flipped
             ? `<span class="study-rating-prompt">${L('답을 확인한 뒤 복습 등급을 선택하세요.', 'Reveal the answer before choosing a review rating.')}</span>`
             : state.pendingReview
@@ -3453,32 +3450,25 @@ function studySessionSeconds(session) {
   return session.durationSeconds || 0;
 }
 
-function studyMonthMiniHTML(sessions) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+function studyMonthMiniHTML(sessions, selected) {
+  const [year, month] = state.logCalMonth.split('-').map(Number);
+  const prefix = `${state.logCalMonth}-`;
   const studied = new Set(sessions.map((session) => String(session.date).slice(0, 10)));
   const today = localDateForExport();
-  const cursor = new Date(now);
-  cursor.setHours(0, 0, 0, 0);
-  if (!studied.has(today)) cursor.setDate(cursor.getDate() - 1);
-  let streak = 0;
-  const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  while (studied.has(iso(cursor))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
   const cells = [];
   for (let i = 0; i < new Date(year, month - 1, 1).getDay(); i += 1) cells.push('<span class="study-mini-cell is-empty"></span>');
   for (let day = 1; day <= new Date(year, month, 0).getDate(); day += 1) {
     const key = `${prefix}${String(day).padStart(2, '0')}`;
-    cells.push(`<span class="study-mini-cell${studied.has(key) ? ' is-done' : ''}${key === today ? ' is-today' : ''}">${day}</span>`);
+    cells.push(`<button type="button" class="study-mini-cell${studied.has(key) ? ' is-done' : ''}${key === today ? ' is-today' : ''}${key === selected ? ' is-selected' : ''}" data-log-date="${key}" aria-pressed="${key === selected}">${day}</button>`);
   }
-  const monthLabel = L(`${month}월`, ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]);
+  const monthLabel = L(`${year}년 ${month}월`, `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year}`);
   return `
-    <div class="study-mini-cal" aria-label="${L('이번 달 학습 출석', 'Study days this month')}">
-      <div class="study-mini-head"><strong>${monthLabel}</strong><span>${L(`연속 ${streak}일`, `${streak}-day streak`)}</span></div>
+    <div class="study-mini-cal" aria-label="${L('학습 출석 달력', 'Study calendar')}">
+      <div class="study-mini-head">
+        <button type="button" class="study-mini-nav" data-log-month="-1" aria-label="${L('이전 달', 'Previous month')}">‹</button>
+        <strong>${monthLabel}</strong>
+        <button type="button" class="study-mini-nav" data-log-month="1" aria-label="${L('다음 달', 'Next month')}">›</button>
+      </div>
       <div class="study-mini-grid">
         ${L(['일', '월', '화', '수', '목', '금', '토'], ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((name) => `<span class="study-mini-weekday">${name}</span>`).join('')}
         ${cells.join('')}
@@ -3500,15 +3490,27 @@ function studyLogPreviewBodyHTML() {
         <div><span>${L('총 학습 시간', 'Total study time')}</span><strong>${formatStudyTime(totalSeconds * 1000)}</strong></div>
       </div>`;
   }
-  const today = localDateForExport();
-  const todays = records.sessions.filter((session) => String(session.date).slice(0, 10) === today);
-  const items = todays.reduce((sum, session) => sum + session.itemCount, 0);
-  const seconds = todays.reduce((sum, session) => sum + studySessionSeconds(session), 0);
+  const selected = state.logSelectedDate || localDateForExport();
+  const days = records.sessions.filter((session) => String(session.date).slice(0, 10) === selected);
+  const items = days.reduce((sum, session) => sum + session.itemCount, 0);
+  const seconds = days.reduce((sum, session) => sum + studySessionSeconds(session), 0);
+  const isToday = selected === localDateForExport();
+  const monthSessions = records.sessions.filter((session) => String(session.date).startsWith(state.logCalMonth));
+  const monthItems = monthSessions.reduce((sum, session) => sum + session.itemCount, 0);
+  const monthSeconds = monthSessions.reduce((sum, session) => sum + studySessionSeconds(session), 0);
+  const monthNumber = Number(state.logCalMonth.slice(5, 7));
+  const monthName = L(`${monthNumber}월`, ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthNumber - 1]);
   return `
-    ${studyMonthMiniHTML(records.sessions)}
+    ${studyMonthMiniHTML(records.sessions, selected)}
+    <div class="study-log-stats-pair">
     <div class="study-log-stats">
-      <div><span>${L('일일 학습 시간', 'Study time today')}</span><strong>${formatStudyTime(seconds * 1000)}</strong></div>
-      <div><span>${L('일일 학습 카드 수', 'Cards studied today')}</span><strong>${items}${L('개', '')}</strong></div>
+      <div><span>${isToday ? L('일일 학습 시간', 'Study time today') : L(`${selected} 학습 시간`, `Study time ${selected}`)}</span><strong>${formatStudyTime(seconds * 1000)}</strong></div>
+      <div><span>${isToday ? L('일일 학습 카드 수', 'Cards studied today') : L(`${selected} 학습 카드 수`, `Cards studied ${selected}`)}</span><strong>${items}${L('개', '')}</strong></div>
+    </div>
+    <div class="study-log-stats is-monthly">
+      <div><span>${L(`${monthName} 학습 시간`, `${monthName} study time`)}</span><strong>${formatStudyTime(monthSeconds * 1000)}</strong></div>
+      <div><span>${L(`${monthName} 학습 카드 수`, `${monthName} cards studied`)}</span><strong>${monthItems}${L('개', '')}</strong></div>
+    </div>
     </div>`;
 }
 
@@ -3516,9 +3518,9 @@ function studyLogPreviewHTML() {
   const failed = Boolean(state.logPreviewError) || !state.studyRecords;
   const view = state.logPreviewView;
   const toggle = (id, label) => `<button type="button" class="learning-status-view-button${view === id ? ' is-active' : ''}" data-log-view="${id}" aria-pressed="${view === id}"${failed ? ' disabled' : ''}>${label}</button>`;
-  return `<section class="study-log-preview${failed ? ' is-disabled' : ''}${view === 'detailed' ? ' is-detailed' : ''}" data-log-preview aria-label="${L('나의 기록', 'My Log')}">
+  return `<section class="study-log-preview ls-section${failed ? ' is-disabled' : ''}${view === 'detailed' ? ' is-detailed' : ''}${state.collapsedSections.log ? ' is-collapsed' : ''}" data-ls-section="log" data-log-preview aria-label="${L('나의 기록', 'My Log')}">
         <div class="study-log-preview-title">
-          <span class="study-ready-eyebrow">${L('나의 기록', 'MY LOG')}</span>
+          ${sectionToggleHTML('log', L('나의 기록', 'MY LOG'))}
           <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">${toggle('simple', L('간단히', 'Simple'))}${toggle('detailed', L('자세히', 'Detailed'))}</div>
         </div>
         <div class="study-log-preview-body" data-log-preview-body>${studyLogPreviewBodyHTML()}</div>
@@ -3526,6 +3528,7 @@ function studyLogPreviewHTML() {
 }
 
 function bindStudyLogPreview() {
+  bindSectionToggles();
   appEl.querySelectorAll('[data-log-view]').forEach((button) => button.addEventListener('click', () => {
     if (button.disabled) return;
     state.logPreviewView = button.dataset.logView;
@@ -3536,6 +3539,24 @@ function bindStudyLogPreview() {
     const scroll = appEl.querySelector('.study-contrib-scroll');
     if (scroll) scroll.scrollLeft = scroll.scrollWidth;
   }));
+  const refreshBody = () => {
+    const body = appEl.querySelector('[data-log-preview-body]');
+    if (body) body.innerHTML = studyLogPreviewBodyHTML();
+    bindStudyLogCalendar();
+  };
+  function bindStudyLogCalendar() {
+    appEl.querySelectorAll('[data-log-date]').forEach((cell) => cell.addEventListener('click', () => {
+      state.logSelectedDate = cell.dataset.logDate;
+      refreshBody();
+    }));
+    appEl.querySelectorAll('[data-log-month]').forEach((button) => button.addEventListener('click', () => {
+      const [year, month] = state.logCalMonth.split('-').map(Number);
+      const next = new Date(year, month - 1 + Number(button.dataset.logMonth), 1);
+      state.logCalMonth = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+      refreshBody();
+    }));
+  }
+  bindStudyLogCalendar();
 }
 
 async function loadStudyLogPreview() {
@@ -3635,7 +3656,6 @@ function retentionStyleDialogHTML() {
             </div>
           </div>
         </div>
-        </div>
         <label class="retention-field"><span>${L('절대 투명도', 'Absolute opacity')}</span><input type="range" min="5" max="100" step="1" data-retention-strength value="${strength}" aria-label="${L('절대 투명도', 'Absolute opacity')}"><output data-retention-strength-out>${strength}%</output></label>
         <p class="retention-hint">${L('높일수록 모든 카드가 전체적으로 진해져요.', 'Higher values make every card darker overall.')}</p>
         <div class="retention-field retention-half-field">
@@ -3653,6 +3673,22 @@ function retentionStyleDialogHTML() {
     </dialog>`;
 }
 
+function sectionToggleHTML(id, label, tag = 'span') {
+  const open = !state.collapsedSections[id];
+  return `<${tag} class="study-ready-eyebrow ls-section-title"><button type="button" class="ls-section-toggle" data-ls-toggle="${id}" aria-expanded="${open}"><i aria-hidden="true">▾</i>${label}</button></${tag}>`;
+}
+
+function bindSectionToggles() {
+  appEl.querySelectorAll('[data-ls-toggle]').forEach((button) => {
+    button.onclick = () => {
+      const id = button.dataset.lsToggle;
+      state.collapsedSections[id] = !state.collapsedSections[id];
+      button.setAttribute('aria-expanded', String(!state.collapsedSections[id]));
+      button.closest('[data-ls-section]')?.classList.toggle('is-collapsed', Boolean(state.collapsedSections[id]));
+    };
+  });
+}
+
 function learningStatusHTML() {
   const now = Date.now();
   const { byId: pairs, invalidCount: invalidPairCount } = indexStudyPairs(state.pairs);
@@ -3668,8 +3704,6 @@ function learningStatusHTML() {
     const item = recordsById.get(pair.id);
     return item ? [item] : [];
   });
-  const studiedOrderedRecords = sourceOrderedRecords.filter(({ category }) => category !== 'new');
-  const newOrderedRecords = sourceOrderedRecords.filter(({ category }) => category === 'new');
   const counts = {
     all: records.length,
     due: records.filter((item) => item.category === 'due').length,
@@ -3677,9 +3711,9 @@ function learningStatusHTML() {
     scheduled: records.filter((item) => item.category === 'scheduled').length,
   };
   const filters = [
-    ['due', L('복습 대상', 'Due'), counts.due],
-    ['scheduled', L('복습 예정', 'Scheduled'), counts.scheduled],
-    ['new', L('새 카드', 'New'), counts.new],
+    ['due', L('복습 예정', 'To review'), counts.due],
+    ['scheduled', L('학습 완료', 'Learned'), counts.scheduled],
+    ['new', L('학습 전', 'Not started'), counts.new],
   ];
   const sortedRecords = records.sort((a, b) => {
     const order = { due: 0, new: 1, scheduled: 2 };
@@ -3688,8 +3722,8 @@ function learningStatusHTML() {
   });
   const statusLabels = {
     due: L('복습할 때예요', 'Review due'),
-    new: L('새 카드', 'New'),
-    scheduled: L('복습 예정', 'Scheduled'),
+    new: L('학습 전', 'Not started'),
+    scheduled: L('학습 완료', 'Learned'),
   };
   const plan = projectPlan();
   const pace = selectedDailyPace(plan, counts.new);
@@ -3700,13 +3734,15 @@ function learningStatusHTML() {
   return `
     ${headerHTML()}
     <main class="learning-status-screen">
+      <section class="ls-section${state.collapsedSections.plan ? ' is-collapsed' : ''}" data-ls-section="plan">
       <header class="learning-status-heading">
-        <p class="study-ready-eyebrow">${L('학습설정', 'LEARNING SETTINGS')}</p>
+        ${sectionToggleHTML('plan', L('학습설정', 'LEARNING SETTINGS'), 'p')}
         ${invalidPairCount ? `<p class="error" role="alert">${L(
           `학습 항목 ${invalidPairCount}개에서 카드 ID를 찾지 못해 상태 목록에서 제외했어요.`,
           `${invalidPairCount} study item(s) have no card ID and were excluded from the status list.`
         )}</p>` : ''}
       </header>
+      <div class="ls-section-body">
       <div class="learning-status-top">
       <section class="exam-plan-panel exam-plan-rows">
         <div class="exam-plan-item" data-plan-item>
@@ -3799,8 +3835,12 @@ function learningStatusHTML() {
         <p class="fsrs-guide-source">${L('출처', 'Source')}: <a href="https://github.com/open-spaced-repetition/ts-fsrs" target="_blank" rel="noopener noreferrer">ts-fsrs</a> · <a href="https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler" target="_blank" rel="noopener noreferrer">Free Spaced Repetition Scheduler</a></p>
       </dialog>
       </div>
+      </div>
+      </section>
       ${studyLogPreviewHTML()}
-      <h2 class="study-ready-eyebrow learning-status-section-title">${L('카드 이해도', 'CARD UNDERSTANDING')}</h2>
+      <section class="ls-section${state.collapsedSections.cards ? ' is-collapsed' : ''}" data-ls-section="cards">
+      ${sectionToggleHTML('cards', L('카드 이해도', 'CARD UNDERSTANDING'), 'h2').replace('class="study-ready-eyebrow ls-section-title"','class="study-ready-eyebrow learning-status-section-title ls-section-title"')}
+      <div class="ls-section-body">
       <div class="learning-status-view-row">
       <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">
         <button type="button" class="learning-status-view-button${state.learningStatusView === 'simple' ? ' is-active' : ''}" data-learning-status-view="simple" aria-controls="learningStatusOverview" aria-pressed="${state.learningStatusView === 'simple'}">${L('간단히', 'Simple')}</button>
@@ -3817,24 +3857,18 @@ function learningStatusHTML() {
           </div>
         </div>
         <div class="learning-status-overview-groups">
-          <section class="learning-status-overview-group" aria-label="${L('학습한 카드', 'Studied cards')}">
-            <h3>${L('학습한 카드', 'Studied cards')} <span>${studiedOrderedRecords.length}</span></h3>
-            <div class="learning-status-overview-grid" role="list" aria-label="${L('원본 순서의 학습한 카드', 'Studied cards in source order')}">
-              ${studiedOrderedRecords.length ? studiedOrderedRecords.map(({ pair, record, category }) => {
-                const label = `${pair.key} · ${L('계산 중', 'Calculating')}`;
-                return `<span class="learning-status-tile" role="listitem" data-learning-status-tile="${esc(record.id)}" data-learning-status-category="${category}" data-tile-key="${esc(pair.key)}" aria-label="${esc(label)}"></span>`;
-              }).join('') : `<p class="learning-status-empty">${L('아직 학습한 카드가 없어요.', 'No cards studied yet.')}</p>`}
+          ${filters.map(([id, label, count]) => {
+            const group = sourceOrderedRecords.filter(({ category }) => category === id);
+            return `<section class="learning-status-overview-group is-${id}" aria-label="${label}">
+            <h3>${label} <span>${count}</span></h3>
+            <div class="learning-status-overview-grid" role="list" aria-label="${label}">
+              ${group.length ? group.map(({ pair, record }) => {
+                const tileLabel = `${pair.key} · ${id === 'new' ? label : L('계산 중', 'Calculating')}`;
+                return `<span class="learning-status-tile" role="listitem" data-learning-status-tile="${esc(record.id)}" data-learning-status-category="${id}" data-tile-key="${esc(pair.key)}" aria-label="${esc(tileLabel)}"></span>`;
+              }).join('') : `<p class="learning-status-empty">${L('해당하는 카드가 없어요.', 'No cards here.')}</p>`}
             </div>
-          </section>
-          <section class="learning-status-overview-group is-new" aria-label="${L('아직 학습하지 않은 카드', 'Not-yet-studied cards')}">
-            <h3>${L('아직 학습하지 않은 카드', 'Not-yet-studied cards')} <span>${newOrderedRecords.length}</span></h3>
-            <div class="learning-status-overview-grid" role="list" aria-label="${L('원본 순서의 미학습 카드', 'Not-yet-studied cards in source order')}">
-              ${newOrderedRecords.length ? newOrderedRecords.map(({ pair, record }) => {
-                const label = `${pair.key} · ${L('학습 전', 'Not studied')}`;
-                return `<span class="learning-status-tile" role="listitem" data-learning-status-tile="${esc(record.id)}" data-learning-status-category="new" data-tile-key="${esc(pair.key)}" aria-label="${esc(label)}"></span>`;
-              }).join('') : `<p class="learning-status-empty">${L('모든 카드를 학습했어요.', 'All cards have been studied.')}</p>`}
-            </div>
-          </section>
+          </section>`;
+          }).join('')}
         </div>
       </section>
       <section id="learningStatusDetailed" class="learning-status-detailed"${state.learningStatusView === 'detailed' ? '' : ' hidden'}>
@@ -3893,6 +3927,8 @@ function learningStatusHTML() {
         ${sortedRecords.length ? `<p class="learning-status-empty" data-learning-status-empty hidden>${L('검색 조건에 맞는 항목이 없어요.', 'No cards match your search.')}</p>` : ''}
       </section>
       <dialog class="learning-status-dialog" aria-label="${L('학습 항목 상세 정보', 'Learning item details')}"></dialog>
+      </section>
+      </div>
       </section>
     </main>`;
 }
@@ -4537,12 +4573,12 @@ function beginStudySession() {
   render();
 }
 
-function advanceStudy(rating) {
+function advanceStudy(rating, before) {
   const session = state.study;
   if (!session || state.studySaving) return;
   const pair = studyCurrentPair();
   if (!pair) return;
-  session.history.push({ id: pair.id, rating });
+  session.history.push({ id: pair.id, rating, before });
   session.index += 1;
   session.enterEffect = 'review';
   if (session.index >= session.cards.length) {
@@ -4557,17 +4593,18 @@ async function rateStudyCard(rating) {
   const session = state.study;
   const pair = studyCurrentPair();
   if (!session || !pair || state.studySaving || state.pendingReview) return;
+  const before = state.fsrsData;
   state.studySaving = true;
   state.studyError = '';
   render();
   try {
     const result = await reviewFsrsCard(state.project, state.fsrsData, pair.id, rating, new Date(), projectPlan().desiredRetention, projectPlan().examDate);
-    state.pendingReview = { data: result.data, rating };
+    state.pendingReview = { data: result.data, rating, before };
     await saveFsrsData(state.project, result.data);
     state.fsrsData = result.data;
     state.pendingReview = null;
     state.studySaving = false;
-    advanceStudy(rating);
+    advanceStudy(rating, before);
   } catch (error) {
     state.studySaving = false;
     state.studyError = L(
@@ -4585,11 +4622,11 @@ async function retryPendingReviewSave() {
   render();
   try {
     await saveFsrsData(state.project, state.pendingReview.data);
-    const rating = state.pendingReview.rating;
+    const { rating, before } = state.pendingReview;
     state.fsrsData = state.pendingReview.data;
     state.pendingReview = null;
     state.studySaving = false;
-    advanceStudy(rating);
+    advanceStudy(rating, before);
   } catch (error) {
     state.studySaving = false;
     state.studyError = L(
@@ -4600,18 +4637,41 @@ async function retryPendingReviewSave() {
   }
 }
 
-async function goToPreviousStudyCard() {
+async function undoStudyRating() {
   const session = state.study;
-  if (!session || !session.history.length || state.studySaving) return;
-  const previous = session.history.pop();
-  const pair = state.pairs.find((item) => item.id === previous.id);
-  if (!pair) return;
-  session.index = session.cards.indexOf(previous.id);
-  session.enterEffect = 'back';
-  enterStudyCard(session);
+  if (!session?.started || !session.history.length || state.studySaving || state.pendingReview) return;
+  const last = session.history.at(-1);
+  state.studySaving = true;
+  state.studyError = '';
   render();
+  try {
+    await saveFsrsData(state.project, last.before);
+    state.fsrsData = last.before;
+    session.history.pop();
+    session.index = session.cards.indexOf(last.id);
+    session.enterEffect = 'back';
+    state.studySaving = false;
+    enterStudyCard(session);
+    render();
+  } catch (error) {
+    state.studySaving = false;
+    state.studyError = L(
+      `선택을 되돌리지 못했어요. 다시 시도해 주세요. ${error instanceof Error ? error.message : String(error)}`,
+      `Could not undo the rating. Please try again. ${error instanceof Error ? error.message : String(error)}`
+    );
+    render();
+  }
 }
 
+async function editCurrentStudyCard() {
+  const session = state.study;
+  const pair = session?.started ? studyCurrentPair() : null;
+  if (!pair || !state.project || state.studySaving) return;
+  const projectId = state.project.id;
+  await finishStudy(false, 'workspace');
+  if (state.page === 'study') return;
+  await editProject(projectId, pair.id);
+}
 async function showStudySpeech() {
   const current = studyCurrentPair();
   const pair = current && studyShownPair(current);
@@ -5352,8 +5412,8 @@ async function handleStudyKeydown(event) {
   } else if (action === 'hint') {
     if (state.study && !state.study.flipped) state.study.hintOpen = !state.study.hintOpen;
     render();
-  } else if (action === 'previous') {
-    await goToPreviousStudyCard();
+  } else if (action === 'undo') {
+    await undoStudyRating();
   } else if (action === 'speak') {
     await showStudySpeech();
   } else if (action === 'exit') {
@@ -5413,6 +5473,8 @@ function attachStudy() {
       else if (action === 'more-new') await addMoreNewCards();
       else if (action === 'fullscreen') await toggleStudyFullscreen();
       else if (action === 'retry-review') await retryPendingReviewSave();
+      else if (action === 'undo') await undoStudyRating();
+      else if (action === 'edit-card') await editCurrentStudyCard();
       else if (action === 'speak') await showStudySpeech();
       else if (action === 'hint' && state.study) {
         state.study.hintOpen = !state.study.hintOpen;
@@ -5698,6 +5760,7 @@ function attach() {
     });
     saveButton?.addEventListener('click', saveEditedProject);
     appEl.querySelector('[data-edit-add-row]')?.addEventListener('click', () => {
+      state.editHighlightRow = null;
       state.editRows.push(['', '', '']);
       state.editDirty = true;
       state.editFocus = { row: state.editRows.length - 1, col: 0 };
@@ -5705,6 +5768,7 @@ function attach() {
     });
     appEl.querySelectorAll('[data-edit-delete-row]').forEach((button) => {
       button.addEventListener('click', () => {
+        state.editHighlightRow = null;
         state.editRows.splice(Number(button.dataset.editDeleteRow), 1);
         state.editDirty = true;
         render();
