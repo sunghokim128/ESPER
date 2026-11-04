@@ -1,36 +1,42 @@
 # Welcome to ESPER!
 
 ## Introduction
-ESPER stands for **Excel-based Spaced-repetition Program for Efficient Retention**.
-It is a spaced-repetition learning tool powered by FSRS-7, designed for people who want a simpler alternative to Anki's interface.
-ESPER works for any kind of memorization that can be organized as key–value pairs, from vocabulary and formulas to scientific concepts and historical facts.
-Import an existing workbook or Anki deck to get started without making flashcards one by one.
+ESPER stands for **Excel-based Spaced-repetition Program for Efficient Retention**.<br>
+It is a spaced-repetition learning tool powered by FSRS-7, designed for people who want a simpler alternative to Anki's interface.<br>
+ESPER works for any kind of memorization that can be organized as key–value pairs, from vocabulary and formulas to scientific concepts and historical facts.<br>
+Import an existing workbook or Anki deck to get started without making flashcards one by one.<br>
 Supported imports: Excel workbooks (.xlsx, .xlsm), Anki decks (.apkg), and ESPER share files (.espr).
 
-## ESPER learning process
-1. **Open ESPER**
-Open ESPER in a current Chromium-based browser such as Chrome or Edge.
-Choose your interface language and a folder for saving projects.
-2. **Import study material.**
-Choose an Excel workbook, Anki deck, or ESPER `.espr` file.
-Anki decks are converted into ESPER workbooks.
-3. **Set your study plan.**
-In Learning status, set an exam date and desired recall level for exam day.
-ESPER suggests a first-pass target at about 80% of the time remaining, leaving the final period for reviews. Use the recommended daily new-card amount or choose your own.
-4. **Study with active recall.**
-Try to remember the value before revealing it. Use a hint if needed, then rate your recall **Again**, **Hard**, **Good**, or **Easy**.
-FSRS-7 uses your ratings to schedule future reviews.
-5. **Continue from your progress.**
-Return to the project for scheduled reviews and track your study activity in Learning status.
+---
 
-    Below are some additional features:
+## ESPER learning process
+
+1. **Open ESPER**<br>
+   Open ESPER in a current Chromium-based browser such as Chrome or Edge. Choose your interface language and a folder for saving projects.
+
+2. **Import study material.**<br>
+   Choose an Excel workbook, Anki deck, or ESPER `.espr` file. Anki decks are converted into ESPER workbooks.
+
+3. **Set your study plan.**<br>
+   In Learning status, set an exam date and desired recall level for exam day. ESPER suggests a first-pass target at about 80% of the time remaining, leaving the final period for reviews. Use the recommended daily new-card amount or choose your own.
+
+4. **Study with active recall.**<br>
+   Try to remember the value before revealing it. Use a hint if needed, then rate your recall **Again**, **Hard**, **Good**, or **Easy**. FSRS-7 uses your ratings to schedule future reviews.
+
+5. **Continue from your progress.**<br>
+   Return to the project for scheduled reviews and track your study activity in Learning status.
+
+### Additional features
+
 - **A4 view:** Review multiple items in a printable layout. Use **Export to PDF** to print or save the view as a PDF.
 - **Learning status:** Review your study log and card understanding, and adjust your study plan.
 
+---
 
 ## Workbook format
-ESPER uses a simple three-column format. The first row is a header; study items begin on the next row.
-The same format works for words, equations, scientific concepts, dates, and more.
+
+ESPER uses a simple three-column format. The first row is a header; study items begin on the next row.<br>
+The same format works for words, equations, scientific concepts, dates, and more.<br>
 Use the in-app **Format Guide** for help preparing a compatible workbook.
 
 - **Column A — Key:** The question, term, or concept to remember.
@@ -45,8 +51,10 @@ In the study card, the **Key** appears on the front. Try to recall the **Value**
 
 ![Action potential study card front and back: recall the key, then flip to see the value and optional image hint](./assets/guide/action-potential-flashcard.svg)
 
+---
 
 ## Project file structure
+
 When you choose a save folder, ESPER organizes project files like this:
 
 ```text
@@ -79,18 +87,22 @@ The screenshots below show how projects appear in ESPER and how they are organiz
 
 ![Example project folder containing its workbook and related data files](./assets/readme/project-folder.png)
 
-Keeping study files in a folder you choose gives you control over where they are stored and lets you back up or move the folder yourself.
-ESPER does not upload study materials or progress to an ESPER account or sync them between devices.
-Reconnect the same folder to continue your projects with their saved progress.
+Keeping study files in a folder you choose gives you control over where they are stored and lets you back up or move the folder yourself.<br>
+ESPER does not upload study materials or progress to an ESPER account or sync them between devices.<br>
+Reconnect the same folder to continue your projects with their saved progress.<br>
 You can also choose different folders for separate sets of projects; each folder works like its own workspace, similar to having multiple accounts, but ESPER does not create or manage user accounts.
 
+---
 
 ## Data storage and privacy
-Study materials and progress stay in the save folder you choose; ESPER does not upload them to an ESPER server.
-The app fetches its tutorial and guide assets from the ESPER site when needed.
+
+Study materials and progress stay in the save folder you choose; ESPER does not upload them to an ESPER server.<br>
+The app fetches its tutorial and guide assets from the ESPER site when needed.<br>
 External sites are contacted only when you choose to open their links, and their privacy policies then apply.
 
+---
 
 ## Acknowledgements
+
 ESPER uses [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) version 6.0.0, by [Open Spaced Repetition](https://github.com/open-spaced-repetition), to implement FSRS-7 scheduling.
 `ts-fsrs` is distributed under the MIT License; see [`vendor/ts-fsrs/LICENSE`](./vendor/ts-fsrs/LICENSE).
