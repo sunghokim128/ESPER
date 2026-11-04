@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createProjectDirectory,
   readFsrsDataFile,
+  readLibraryFile,
   readProjectWorkbook,
   readStudyRecordFile,
   removeProjectDirectory,
@@ -10,6 +11,7 @@ import {
   projectNameFromFileName,
   projectNameKey,
   writeFsrsDataFile,
+  writeLibraryFile,
   writeProjectWorkbook,
   writeStudyRecordFile,
 } from '../lib/projectStore.js';
@@ -118,6 +120,28 @@ function fakeIndexedDb(records) {
     },
   };
 }
+
+test('writes and reads extensible library preferences', async () => {
+  const previousIndexedDb = globalThis.indexedDB;
+  const records = new Map([['workbookDirectory', { handle: memoryDirectory() }]]);
+  globalThis.indexedDB = fakeIndexedDb(records);
+
+  try {
+    const library = {
+      version: 1,
+      preferences: {
+        version: 1,
+        language: 'ko',
+        futurePreference: { enabled: true },
+      },
+    };
+    assert.equal(await writeLibraryFile(library), true);
+    assert.deepEqual(await readLibraryFile(), library);
+  } finally {
+    if (previousIndexedDb === undefined) delete globalThis.indexedDB;
+    else globalThis.indexedDB = previousIndexedDb;
+  }
+});
 
 test('stores the workbook, FSRS data, and study record inside one project folder', async () => {
   const previousIndexedDb = globalThis.indexedDB;

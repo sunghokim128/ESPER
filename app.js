@@ -37,7 +37,7 @@ import {
   reviewFsrsCard,
   saveFsrsData,
   synchronizeFsrsProject,
-} from './lib/fsrs.js?v=7';
+} from './lib/fsrs.js?v=8';
 import {
   deleteProjectRecord,
   createProjectDirectory,
@@ -64,8 +64,8 @@ import {
   saveStudySettings as saveStudySettingsToStore,
   readStudyRecordFile,
   writeStudyRecordFile,
-} from './lib/projectStore.js?v=5';
-import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=6';
+} from './lib/projectStore.js?v=6';
+import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=7';
 import {
   DEFAULT_DAILY_NEW_CARDS,
   dailyNewCardPlan,
@@ -346,6 +346,8 @@ const state = {
   logPreviewView: 'simple',
   logSelectedDate: null,
   logCalMonth: localDateForExport().slice(0, 7),
+  editColumnWidths: null,
+  libraryNeedsMigration: false,
   learningStatusFilters: ['due', 'scheduled', 'new'],
   learningStatusPlanMessage: '',
   learningStatusQuery: '',
@@ -933,19 +935,149 @@ async function persistLibrary(ids = state.projects.map((project) => project.id))
       dailyPaceModes[project.name] = project.plan.useRecommendedDailyPace;
     }
   }
-  await writeLibraryFile({
+  const savedPreferences = previous?.preferences && typeof previous.preferences === 'object' && !Array.isArray(previous.preferences)
+    ? previous.preferences
+    : {};
+  const savedLearningStatus = savedPreferences.learningStatus && typeof savedPreferences.learningStatus === 'object'
+    ? savedPreferences.learningStatus
+    : {};
+  const savedCollapsedSections = savedLearningStatus.collapsedSections && typeof savedLearningStatus.collapsedSections === 'object'
+    ? savedLearningStatus.collapsedSections
+    : {};
+  const savedMyLog = savedPreferences.myLog && typeof savedPreferences.myLog === 'object'
+    ? savedPreferences.myLog
+    : {};
+  const preferences = {
+    ...savedPreferences,
+    version: 1,
+    language,
+    studySettings: {
+      ...(savedPreferences.studySettings && typeof savedPreferences.studySettings === 'object'
+        ? savedPreferences.studySettings
+        : {}),
+      ...state.studySettings,
+      fontSizes: {
+        ...savedPreferences.studySettings?.fontSizes,
+        ...state.studySettings.fontSizes,
+      },
+      imageSizes: {
+        ...savedPreferences.studySettings?.imageSizes,
+        ...state.studySettings.imageSizes,
+      },
+      imageHeights: {
+        ...savedPreferences.studySettings?.imageHeights,
+        ...state.studySettings.imageHeights,
+      },
+      shortcuts: {
+        ...savedPreferences.studySettings?.shortcuts,
+        ...state.studySettings.shortcuts,
+      },
+      retentionStyle: {
+        ...savedPreferences.studySettings?.retentionStyle,
+        ...state.studySettings.retentionStyle,
+      },
+    },
+    editColumnWidths: state.editColumnWidths || [...DEFAULT_EDIT_COLUMN_WIDTHS],
+    learningStatus: {
+      ...savedLearningStatus,
+      view: state.learningStatusView,
+      collapsedSections: {
+        ...savedCollapsedSections,
+        ...state.collapsedSections,
+      },
+    },
+    myLog: {
+      ...savedMyLog,
+      view: state.logPreviewView,
+    },
+  };
+  const saved = await writeLibraryFile({
     ...(previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {}),
     version: 1,
     order: ordered.map((project) => project.name),
     colors: Object.fromEntries(ordered.map((project) => [project.name, project.cartridgeColorIndex ?? 0])),
     retentionStyle: state.studySettings.retentionStyle,
     dailyPaceModes,
+    preferences,
   });
+  if (!saved && state.directoryConnected) {
+    throw new Error(L('저장 폴더 권한을 확인해 주세요.', 'Please check access to the save folder.'));
+  }
+  return saved;
+}
+
+async function persistUserPreferences() {
+  try {
+    const saved = await persistLibrary();
+    if (saved) state.libraryNeedsMigration = false;
+    return true;
+  } catch (error) {
+    state.error = L(
+      `설정을 esper-library.json에 저장하지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+      `Could not save preferences to esper-library.json: ${error instanceof Error ? error.message : String(error)}`
+    );
+    render();
+    return false;
+  }
 }
 
 async function saveProjectOrder(ids) {
   await saveProjectOrderRecord(ids);
   await persistLibrary(ids);
+}
+
+function applyLibraryPreferences(library, fallbackLanguage, fallbackStudySettings) {
+  const preferences = library?.preferences && typeof library.preferences === 'object' && !Array.isArray(library.preferences)
+    ? library.preferences
+    : {};
+  const libraryStudySettings = preferences.studySettings && typeof preferences.studySettings === 'object'
+    ? preferences.studySettings
+    : {};
+  state.studySettings = normalizeStudySettings({
+    ...fallbackStudySettings,
+    ...libraryStudySettings,
+    fontSizes: { ...fallbackStudySettings.fontSizes, ...libraryStudySettings.fontSizes },
+    imageSizes: { ...fallbackStudySettings.imageSizes, ...libraryStudySettings.imageSizes },
+    imageHeights: { ...fallbackStudySettings.imageHeights, ...libraryStudySettings.imageHeights },
+    shortcuts: { ...fallbackStudySettings.shortcuts, ...libraryStudySettings.shortcuts },
+    retentionStyle: libraryStudySettings.retentionStyle ?? library?.retentionStyle ?? fallbackStudySettings.retentionStyle,
+  });
+  const preferredLanguage = preferences.language === 'ko' || preferences.language === 'en'
+    ? preferences.language
+    : fallbackLanguage;
+  setLanguageValue(preferredLanguage || (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Seoul' ? 'ko' : 'en'));
+  if (preferences.learningStatus?.view === 'simple' || preferences.learningStatus?.view === 'detailed') {
+    state.learningStatusView = preferences.learningStatus.view;
+  }
+  if (preferences.learningStatus?.collapsedSections && typeof preferences.learningStatus.collapsedSections === 'object') {
+    state.collapsedSections = Object.fromEntries(
+      Object.entries(preferences.learningStatus.collapsedSections)
+        .filter(([, collapsed]) => typeof collapsed === 'boolean')
+    );
+  }
+  if (preferences.myLog?.view === 'simple' || preferences.myLog?.view === 'detailed') {
+    state.logPreviewView = preferences.myLog.view;
+  }
+  const preferredWidths = preferences.editColumnWidths;
+  if (validEditColumnWidths(preferredWidths)) {
+    state.editColumnWidths = [...preferredWidths];
+  } else {
+    try {
+      const legacyWidths = localStorage.getItem(EDIT_COLUMN_WIDTHS_KEY);
+      const parsedWidths = legacyWidths === null ? null : JSON.parse(legacyWidths);
+      state.editColumnWidths = validEditColumnWidths(parsedWidths)
+        ? parsedWidths
+        : [...DEFAULT_EDIT_COLUMN_WIDTHS];
+    } catch {
+      state.editColumnWidths = [...DEFAULT_EDIT_COLUMN_WIDTHS];
+    }
+  }
+  state.libraryNeedsMigration = !preferences.version ||
+    !preferences.studySettings ||
+    !preferences.language ||
+    !preferences.editColumnWidths ||
+    !preferences.learningStatus ||
+    !preferences.myLog;
 }
 
 async function load() {
@@ -959,11 +1091,9 @@ async function load() {
     ];
     state.projectOrder = state.projects.map((project) => project.id);
     const savedLanguage = await getLanguage();
-    if (savedLanguage) setLanguageValue(savedLanguage);
-    else setLanguageValue(Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Seoul' ? 'ko' : 'en');
-    state.studySettings = normalizeStudySettings(await getStudySettings());
+    const savedStudySettings = await getStudySettings() || {};
     const library = await readLibraryFile();
-    if (library?.retentionStyle) state.studySettings.retentionStyle = normalizeRetentionStyle(library.retentionStyle);
+    applyLibraryPreferences(library, savedLanguage, savedStudySettings);
     for (const project of state.projects) {
       const savedMode = library?.dailyPaceModes?.[project.name];
       if (typeof savedMode === 'boolean') {
@@ -1024,7 +1154,8 @@ async function changeLanguage(value) {
   const previousLanguage = language;
   setLanguageValue(next);
   state.languageChoicePending = false;
-  state.error = '';
+  const preferencesSaved = await persistUserPreferences();
+  if (preferencesSaved) state.error = '';
   state.notice = '';
   mountSupportWidget();
   if (previousLanguage !== language) loadGenerationPrompt().then(() => {
@@ -1738,6 +1869,9 @@ async function connectWorkbookDirectory() {
     state.logPreviewError = '';
     state.error = '';
     state.notice = L(`${directory.name} 폴더를 저장 위치로 연결했어요.`, `Connected the ${directory.name} folder as your save location.`);
+    const library = await readLibraryFile();
+    if (library) applyLibraryPreferences(library, language, state.studySettings);
+    else state.libraryNeedsMigration = true;
     let prepared;
     try {
       await resetProjectsForDirectory();
@@ -1750,6 +1884,7 @@ async function connectWorkbookDirectory() {
       render();
       return;
     }
+    if (state.libraryNeedsMigration) await persistLibrary();
     if (prepared.recoveredCount) {
       state.page = 'workspace';
       state.notice = L(
@@ -1787,6 +1922,7 @@ async function ensureWorkbookDirectoryAccess() {
     state.directoryConnected = true;
     state.directorySaved = true;
     state.directoryName = directory.name;
+    if (state.libraryNeedsMigration) await persistLibrary();
     return true;
   } catch (error) {
     state.error = `${L('저장 폴더 권한을 확인하지 못했어요', 'Could not check folder access')}: ${error instanceof Error ? error.message : String(error)}`;
@@ -1800,16 +1936,19 @@ const EDIT_COLUMN_LABELS_EN = ['Key', 'Value', 'Hint'];
 const DEFAULT_EDIT_COLUMN_WIDTHS = [0.28, 0.32, 0.4];
 const MIN_EDIT_COLUMN_WIDTH = 100;
 
+function validEditColumnWidths(widths) {
+  return Array.isArray(widths) &&
+    widths.length === 3 &&
+    widths.every((width) => Number.isFinite(width) && width > 0) &&
+    Math.abs(widths.reduce((sum, width) => sum + width, 0) - 1) <= 0.001;
+}
+
 function loadEditColumnWidths() {
+  if (state.editColumnWidths) return [...state.editColumnWidths];
   const saved = localStorage.getItem(EDIT_COLUMN_WIDTHS_KEY);
   if (saved === null) return [...DEFAULT_EDIT_COLUMN_WIDTHS];
   const widths = JSON.parse(saved);
-  if (
-    !Array.isArray(widths) ||
-    widths.length !== 3 ||
-    widths.some((width) => !Number.isFinite(width) || width <= 0) ||
-    Math.abs(widths.reduce((sum, width) => sum + width, 0) - 1) > 0.001
-  ) {
+  if (!validEditColumnWidths(widths)) {
     throw new Error(L('저장된 열 너비 설정이 올바르지 않습니다.', 'Saved column width settings are invalid.'));
   }
   return widths;
@@ -1817,6 +1956,7 @@ function loadEditColumnWidths() {
 
 function saveEditColumnWidths(widths) {
   const normalized = normalizeColumnWidths(widths);
+  state.editColumnWidths = normalized;
   localStorage.setItem(EDIT_COLUMN_WIDTHS_KEY, JSON.stringify(normalized));
   return normalized;
 }
@@ -2728,12 +2868,12 @@ function formatExamplesHTML() {
           ],
         },
         {
-          title: 'Medical concept',
-          sheet: 'Medical',
+          title: 'MCAT concept',
+          sheet: 'MCAT',
           rows: [
-              ['Hypertension', 'persistently higher than normal blood pressure', 'Diagnosed when repeated readings reach 140/90 mmHg or above.'],
-              ['Tachycardia', 'a resting heart rate above 100 beats per minute', ''],
-              ['Anemia', 'a lower than normal amount of red blood cells or hemoglobin', 'Common signs: fatigue and pale skin.'],
+              ['Henderson–Hasselbalch equation', 'pH = pKa + log₁₀([A⁻]/[HA])', 'At pH = pKa, [A⁻] = [HA].'],
+              ['Michaelis–Menten kinetics', 'v = Vmax[S] / (Km + [S])', 'Km is [S] at ½ Vmax.'],
+              ['Action potential', 'Na⁺ influx depolarizes; K⁺ efflux repolarizes.', { type: 'action-potential-diagram' }],
           ],
         },
       ]
@@ -2748,12 +2888,12 @@ function formatExamplesHTML() {
           ],
         },
         {
-          title: '의학 개념 암기',
-          sheet: '의학',
+          title: 'MCAT 개념 암기',
+          sheet: 'MCAT',
           rows: [
-              ['Hypertension', '지속적으로 혈압이 정상보다 높은 상태', '수축기 140mmHg 이상 또는 이완기 90mmHg 이상이 반복 측정될 때 진단'],
-              ['Tachycardia', '안정 시 심박수가 분당 100회를 넘는 상태', ''],
-              ['Anemia', '적혈구 또는 헤모글로빈이 정상보다 적은 상태', '피로감, 창백한 피부가 흔한 증상'],
+              ['Henderson–Hasselbalch equation', 'pH = pKa + log₁₀([A⁻]/[HA])', 'pH = pKa일 때 [A⁻]와 [HA]가 같아요.'],
+              ['Michaelis–Menten kinetics', 'v = Vmax[S] / (Km + [S])', 'Km은 반응 속도가 ½Vmax일 때의 [S]예요.'],
+              ['Action potential', 'Na⁺ 유입은 탈분극, K⁺ 유출은 재분극을 일으켜요.', { type: 'action-potential-diagram' }],
           ],
         },
       ];
@@ -2780,6 +2920,24 @@ function formatExamplesHTML() {
     const column = columnInfo[ci];
     return `<td class="sheet-cell ${ci < 2 ? 'is-required' : 'is-optional'}" data-col="${ci}" data-guide-title="${String.fromCharCode(65 + ci)} · ${esc(column.name)}" data-guide-required="${esc(column.required)}" data-guide-description="${esc(column.description)}">${content}</td>`;
   };
+  const exampleValueHTML = (value, ci) => {
+    if (value?.type === 'action-potential-diagram') {
+      return `
+        <span>${L('활동 전위 변화', 'Action potential')}</span>
+        <svg class="format-example-diagram" viewBox="0 0 280 116" role="img" aria-label="${L('시간에 따른 활동 전위: 탈분극 후 재분극', 'Action potential over time: depolarization followed by repolarization')}">
+          <path d="M34 12v78h232" fill="none" stroke="#8b929a" stroke-width="1.5"/>
+          <path d="M35 67h230M35 35h230" fill="none" stroke="#e1e4e7" stroke-width="1" stroke-dasharray="3 4"/>
+          <path d="M38 67h52c10 0 12-2 17-11l19-39c5-10 10-10 14 2l13 39c5 15 13 19 24 19h88" fill="none" stroke="#8f3f26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="5" y="18" class="diagram-axis">${L('전위', 'mV')}</text>
+          <text x="13" y="71" class="diagram-axis">−70</text>
+          <text x="20" y="39" class="diagram-axis">0</text>
+          <text x="70" y="105" class="diagram-label">${L('휴지', 'Rest')}</text>
+          <text x="105" y="105" class="diagram-label">${L('탈분극', 'Depolarization')}</text>
+          <text x="188" y="105" class="diagram-label">${L('재분극', 'Repolarization')}</text>
+        </svg>`;
+    }
+    return value ? esc(value) : (ci === 2 ? `<span class="sheet-optional-mark">${optionalMark}</span>` : '');
+  };
   return `
     <div class="format-examples">
       ${examples.map((example, index) => `
@@ -2791,7 +2949,7 @@ function formatExamplesHTML() {
             </thead>
             <tbody>
               <tr class="sheet-header-row"><th class="sheet-rownum">1</th>${headerLabels.map((label, ci) => cellHTML(ci, esc(label))).join('')}</tr>
-              ${example.rows.map((row, ri) => `<tr><th class="sheet-rownum">${ri + 2}</th>${row.map((value, ci) => cellHTML(ci, value ? esc(value) : (ci === 2 ? `<span class="sheet-optional-mark">${optionalMark}</span>` : ''))).join('')}</tr>`).join('')}
+              ${example.rows.map((row, ri) => `<tr><th class="sheet-rownum">${ri + 2}</th>${row.map((value, ci) => cellHTML(ci, exampleValueHTML(value, ci))).join('')}</tr>`).join('')}
             </tbody>
           </table>
         </article>`).join('')}
@@ -3536,6 +3694,7 @@ function bindStudyLogPreview() {
     if (!card) return;
     card.outerHTML = studyLogPreviewHTML();
     bindStudyLogPreview();
+    persistUserPreferences();
     const scroll = appEl.querySelector('.study-contrib-scroll');
     if (scroll) scroll.scrollLeft = scroll.scrollWidth;
   }));
@@ -3680,11 +3839,12 @@ function sectionToggleHTML(id, label, tag = 'span') {
 
 function bindSectionToggles() {
   appEl.querySelectorAll('[data-ls-toggle]').forEach((button) => {
-    button.onclick = () => {
+    button.onclick = async () => {
       const id = button.dataset.lsToggle;
       state.collapsedSections[id] = !state.collapsedSections[id];
       button.setAttribute('aria-expanded', String(!state.collapsedSections[id]));
       button.closest('[data-ls-section]')?.classList.toggle('is-collapsed', Boolean(state.collapsedSections[id]));
+      await persistUserPreferences();
     };
   });
 }
@@ -4732,6 +4892,8 @@ function normalizeStudyPair(pair, index = 0) {
 async function saveStudySettings() {
   try {
     await saveStudySettingsToStore(state.studySettings);
+    const savedToLibrary = await persistLibrary();
+    if (savedToLibrary) state.libraryNeedsMigration = false;
     if (state.study) {
       state.study.settings = normalizeStudySettings(state.studySettings);
     }
@@ -5035,6 +5197,7 @@ function attachLearningStatusPage() {
         item.classList.toggle('is-active', selected);
         item.setAttribute('aria-pressed', String(selected));
       });
+      persistUserPreferences();
     });
   });
   const refreshCardRecall = async (card) => {
@@ -5693,6 +5856,9 @@ function attach() {
         try {
           columnWidths = saveEditColumnWidths(getColumnWidths());
           setEditStatus(L('열 너비를 저장했어요.', 'Column widths saved.'));
+          persistLibrary().catch((error) => {
+            setEditStatus(`${L('열 너비를 라이브러리에 저장하지 못했어요.', 'Could not save column widths to the library.')}${error instanceof Error ? ` ${error.message}` : ''}`, true);
+          });
         } catch (error) {
           setEditStatus(`${L('열 너비를 저장하지 못했어요.', 'Could not save column widths.')}${error instanceof Error ? ` ${error.message}` : ''}`, true);
         }
@@ -6153,6 +6319,17 @@ async function init() {
       state.error = L(
         `저장 폴더 자료를 불러오지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
         `Could not load projects from the save folder: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+  if (state.directoryConnected && state.libraryNeedsMigration) {
+    try {
+      const saved = await persistLibrary();
+      if (saved) state.libraryNeedsMigration = false;
+    } catch (error) {
+      state.error = L(
+        `기존 설정을 esper-library.json으로 옮기지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not migrate existing preferences to esper-library.json: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

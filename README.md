@@ -20,7 +20,7 @@ Open https://sunghokim128.github.io/ESPER/ in a Chromium-based browser (Chrome o
 2. Add an Excel, CSV, TXT, TSV, Anki `.apkg`, or ESPER `.espr` file. Opening a cartridge takes you directly to its Study page.
 3. On the Study page, try to recall the value for each key. Flip the card to reveal the value, then open its hint if needed. Rate your recall **Again**, **Hard**, **Good**, or **Easy**.
 4. Use the header to switch between **Study**, **Learning status**, and **A4 view** once a project is open (the home page shows only the project list). The header always shows the save-location status: a green dot with the folder name when access is granted, or a blinking red dot with "Not set" when it is not. Folder errors appear in red under the button.
-   - **Learning status** has three sections. **Settings** holds the exam D-day, target recall on the exam day, and daily new-card count; each row is edited on its own with its own save/cancel, and the first-pass completion date is derived from them. **My Log** has a **Simple / Detailed** toggle: Simple shows this month's calendar, streak, and today's study time and card count; Detailed shows a one-year contribution graph plus total study time and total cards studied. **Card understanding** also has Simple / Detailed: Simple is a tile grid in workbook order whose opacity reflects estimated recall (hover for key and probability), Detailed is a searchable, filterable card list where selecting a card shows its value, hint, recall probability, and FSRS details.
+   - **Learning status** has three collapsible sections. **Settings** holds the exam D-day, target recall on the exam day, and daily new-card count; each row is edited on its own with its own save/cancel, and the first-pass completion date is derived from them. **My Log** has a **Simple / Detailed** toggle: Simple shows a selectable monthly calendar with daily and monthly study time and card counts; Detailed shows a one-year contribution graph plus total study time and total cards studied. **Card understanding** also has Simple / Detailed: Simple divides the workbook-order tile grid into due, learned, and not-yet-studied groups, with opacity reflecting estimated recall; Detailed is a searchable, filterable card list where selecting a card shows its value, hint, recall probability, and FSRS details.
    - Browser Back is disabled; use the in-app navigation.
 5. In A4 view, click a key to reveal or hide its hint. Choose **Learning priority** to put reviewed cards first from lowest estimated recall to highest, then start unreviewed cards on a separate section/page. Adjust image size and other display settings in the grouped settings panel. Use the header to return to Study.
 
@@ -48,10 +48,11 @@ Exam dates use an in-app calendar localized to the selected language. The AI gen
 
 ## Saving and records
 
-ESPER processes files in the browser. Project settings, interface language, and study settings are kept in IndexedDB. Connect a save folder to keep each project and its files together:
+ESPER processes files in the browser. The selected save folder contains an `esper-library.json` file with project order and colors plus a versioned `preferences` object. Preferences include interface language, study display settings and shortcuts, edit-table column widths, and the Learning status/My Log view and section-collapse choices. Unknown preference fields are preserved so later app versions can extend the object without discarding settings written by newer versions. Settings are also kept in browser storage where needed for compatibility and while folder access is unavailable. Connect a save folder to keep each project and its files together:
 
 ```text
 selected-folder/
+├── esper-library.json
 └── vocabulary/
     ├── vocabulary.xlsx
     ├── vocabulary.json

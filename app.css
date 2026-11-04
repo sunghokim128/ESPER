@@ -4880,6 +4880,7 @@ body:has(.app-shell.workspace-page) {
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 6px 18px rgba(48, 40, 31, .1);
+  border-bottom: 0;
 }
 
 .format-example-table {
@@ -4950,8 +4951,9 @@ body:has(.app-shell.workspace-page) {
 
 .sheet-tabs {
   display: flex;
+  align-items: flex-start;
   gap: 2px;
-  padding: 4px 8px 0;
+  padding: 0 8px;
   border: 1px solid #c9ccd1;
   border-top: 0;
   border-radius: 0 0 8px 8px;
@@ -4960,10 +4962,10 @@ body:has(.app-shell.workspace-page) {
 
 .sheet-tab {
   min-height: 30px;
-  padding: 5px 16px 7px;
+  padding: 5px 16px 6px;
   border: 1px solid transparent;
-  border-top: 0;
-  border-radius: 0 0 5px 5px;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
   background: transparent;
   color: #4b5560;
   font: inherit;
@@ -4978,7 +4980,7 @@ body:has(.app-shell.workspace-page) {
 
 .sheet-tab.is-active {
   border-color: #c9ccd1;
-  border-top-color: #fff;
+  border-bottom-color: #fff;
   background: #fff;
   color: #1e6b45;
 }
@@ -6809,6 +6811,17 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .study-log-preview .study-log-preview-body { padding: 16px 20px; border-radius: 14px; }
 .study-log-preview.is-detailed .study-log-preview-body { padding: 18px 20px; }
 .learning-status-section-title { margin-top: 0; }
+.study-log-preview:not(.is-collapsed) { margin-bottom: 64px; }
+
+.format-examples { row-gap: 0; }
+.format-example-card { border-radius: 8px 8px 0 0; }
+.format-example-note { margin-top: 10px; }
+.format-example-diagram { display: block; width: min(100%, 240px); height: auto; margin-top: 6px; overflow: visible; }
+.format-example-diagram .diagram-axis { fill: #737b83; font: 9px Arial, sans-serif; }
+.format-example-diagram .diagram-label { fill: #5f666e; font: 8px Arial, sans-serif; }
+.sheet-tabs { padding-left: 36px; }
+.sheet-tab { border-top: 0; border-bottom: 1px solid transparent; border-radius: 0 0 5px 5px; }
+.sheet-tab.is-active { border-top-color: #fff; border-bottom-color: #c9ccd1; }
 
 /* Study: undo button and edit-card shortcut */
 .study-card-actions .study-undo-button { position: absolute; left: 0; top: 50%; transform: translateY(-50%); min-height: 0; padding: 5px 10px; font-size: 12px; white-space: nowrap; }
