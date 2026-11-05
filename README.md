@@ -109,5 +109,5 @@ Third-party sites are contacted only when you choose to open their links; their 
 
 ## Acknowledgements
 
-ESPER uses [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) version 6.0.0 by [Open Spaced Repetition](https://github.com/open-spaced-repetition) to implement FSRS-7 scheduling.<br>
-`ts-fsrs` is distributed under the MIT License. See [`vendor/ts-fsrs/LICENSE`](./vendor/ts-fsrs/LICENSE).
+ESPER uses a vendored copy of [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) version 6.0.0, created by [Open Spaced Repetition](https://github.com/open-spaced-repetition), to implement FSRS-7 scheduling. The library's bundled source is [`vendor/ts-fsrs/index.umd.js`](./vendor/ts-fsrs/index.umd.js).<br>
+`ts-fsrs` is distributed under the MIT License. Its copyright and license notice are preserved in [`vendor/ts-fsrs/LICENSE`](./vendor/ts-fsrs/LICENSE).
