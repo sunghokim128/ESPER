@@ -1,3 +1,5 @@
+<a href="https://youtu.be/OC4Cubn3H78?si=3OSJvky_JRfOxakA"><img src="https://img.youtube.com/vi/OC4Cubn3H78/hqdefault.jpg" alt="Watch the ESPER tutorial video"></a>
+
 ## Introduction
 
 ESPER stands for **Excel-based Spaced-repetition Program for Efficient Retention**.<br>
