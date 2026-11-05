@@ -76,7 +76,7 @@ chosen-folder/
 
 - `study-workbook.xlsx` — The study material. Anki decks are converted to `.xlsx`; imported Excel workbooks keep their supported file extension.
 - `study-workbook.json` — FSRS card states and review history, along with exam-planning settings.
-- `project-name study record.json` — My Log study-session summaries.
+- `project-name study record.json` — My Log session dates, cards studied, and study time. Monthly view shows a selectable calendar and deletable session records; Yearly view shows the annual activity graph and totals.
 - `images/` — Images used in the workbook.
 - `esper-library.json` — Project order, colors, and user preferences. Project-list details, some settings, and save-folder permission are also kept in the browser.
 

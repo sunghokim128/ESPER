@@ -1,4 +1,4 @@
-import { appendStudySession, emptyStudyRecords } from './lib/studyRecords.js?v=2';
+import { appendStudySession, emptyStudyRecords, removeStudySession } from './lib/studyRecords.js?v=3';
 import {
   parseStudyFile,
   normalizeStudyWorkbook,
@@ -343,9 +343,12 @@ const state = {
   studyRecords: null,
   logPreviewLoading: false,
   logPreviewError: '',
-  logPreviewView: 'simple',
+  logPreviewView: 'monthly',
   logSelectedDate: null,
   logCalMonth: localDateForExport().slice(0, 7),
+  logYear: Number(localDateForExport().slice(0, 4)),
+  logSessionDeleting: false,
+  logDeleteError: '',
   editColumnWidths: null,
   libraryNeedsMigration: false,
   learningStatusFilters: ['due', 'scheduled', 'new'],
@@ -1055,9 +1058,10 @@ function applyLibraryPreferences(library, fallbackLanguage, fallbackStudySetting
         .filter(([, collapsed]) => typeof collapsed === 'boolean')
     );
   }
-  if (preferences.myLog?.view === 'simple' || preferences.myLog?.view === 'detailed') {
-    state.logPreviewView = preferences.myLog.view;
-  }
+  const myLogView = preferences.myLog?.view;
+  if (myLogView === 'monthly' || myLogView === 'yearly') state.logPreviewView = myLogView;
+  else if (myLogView === 'simple') state.logPreviewView = 'monthly';
+  else if (myLogView === 'detailed') state.logPreviewView = 'yearly';
   const preferredWidths = preferences.editColumnWidths;
   if (validEditColumnWidths(preferredWidths)) {
     state.editColumnWidths = [...preferredWidths];
@@ -1319,6 +1323,7 @@ async function importWorkbookFile(file, images = []) {
     }
     state.project = project;
     state.studyRecords = null;
+    state.logDeleteError = '';
     state.logPreviewError = '';
     state.fsrsData = fsrsData;
     state.pairs = project.pairs;
@@ -1759,6 +1764,7 @@ async function openProject(id, destination = 'study') {
     await saveProject(project);
     state.project = project;
     state.studyRecords = null;
+    state.logDeleteError = '';
     state.logPreviewError = '';
     state.sourceFile = file;
     state.fsrsData = synchronized.data;
@@ -2005,6 +2011,7 @@ async function editProject(id, focusPairId = null) {
     if (!rows.length) rows.push(['', '', '']);
     state.project = project;
     state.studyRecords = null;
+    state.logDeleteError = '';
     state.logPreviewError = '';
     state.fsrsData = synchronized.data;
     state.pairs = synchronized.pairs.map(normalizeStudyPair);
@@ -2164,6 +2171,7 @@ async function saveEditedProject() {
     state.projects = state.projects.map((item) => (item.id === updated.id ? updated : item));
     state.project = updated;
     state.studyRecords = null;
+    state.logDeleteError = '';
     state.logPreviewError = '';
     state.fsrsData = synchronized.data;
     state.pairs = synchronized.pairs.map(normalizeStudyPair);
@@ -3608,78 +3616,177 @@ function studySessionSeconds(session) {
   return session.durationSeconds || 0;
 }
 
-function studyMonthMiniHTML(sessions, selected) {
+function studyLogStatsHTML(sessions, periodLabel) {
+  const items = sessions.reduce((sum, session) => sum + session.itemCount, 0);
+  const seconds = sessions.reduce((sum, session) => sum + studySessionSeconds(session), 0);
+  return `<div class="study-log-stats">
+    <div><span>${L(`${periodLabel} 학습 카드 수`, `${periodLabel} cards studied`)}</span><strong>${items}${L('개', '')}</strong></div>
+    <div><span>${L(`${periodLabel} 학습 시간`, `${periodLabel} study time`)}</span><strong>${formatStudyTime(seconds * 1000)}</strong></div>
+  </div>`;
+}
+
+function studyLogPeriodNavHTML() {
+  if (state.logPreviewView === 'monthly') {
+    const [year, month] = state.logCalMonth.split('-').map(Number);
+    const label = L(`${year}년 ${month}월`, `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1]} ${year}`);
+    return `<div class="study-log-period-nav">
+      <button type="button" data-log-step="month:-1" aria-label="${L('이전 달', 'Previous month')}">‹</button>
+      <strong>${label}</strong>
+      <button type="button" data-log-step="month:1" aria-label="${L('다음 달', 'Next month')}">›</button>
+    </div>`;
+  }
+  return `<div class="study-log-period-nav">
+    <button type="button" data-log-step="year:-1" aria-label="${L('이전 해', 'Previous year')}">‹</button>
+    <strong>${state.logYear}</strong>
+    <button type="button" data-log-step="year:1" aria-label="${L('다음 해', 'Next year')}">›</button>
+  </div>`;
+}
+
+function studyLogDailySessionsHTML(sessions) {
+  if (!sessions.length) return `<p class="study-log-empty">${L('이 날짜의 학습 기록이 없어요.', 'No study sessions for this day.')}</p>`;
+  return `<div class="study-log-session-list">${sessions.map(({ session, index }, round) => `
+    <article class="study-log-session">
+      <strong>${L(`${round + 1}회차`, `Round ${round + 1}`)}</strong>
+      <span>${L('학습 카드', 'Cards studied')} <b>${session.itemCount}${L('개', '')}</b></span>
+      <span>${L('학습 시간', 'Study time')} <b>${formatStudyTime(studySessionSeconds(session) * 1000)}</b></span>
+      <button type="button" class="study-log-delete" data-log-delete="${index}"${state.logSessionDeleting ? ' disabled' : ''}>${state.logSessionDeleting ? L('삭제 중…', 'Deleting…') : L('삭제', 'Delete')}</button>
+    </article>`).join('')}</div>`;
+}
+
+function studyLogCalendarHTML(sessions, selectedDate) {
   const [year, month] = state.logCalMonth.split('-').map(Number);
   const prefix = `${state.logCalMonth}-`;
-  const studied = new Set(sessions.map((session) => String(session.date).slice(0, 10)));
-  const today = localDateForExport();
-  const cells = [];
-  for (let i = 0; i < new Date(year, month - 1, 1).getDay(); i += 1) cells.push('<span class="study-mini-cell is-empty"></span>');
-  for (let day = 1; day <= new Date(year, month, 0).getDate(); day += 1) {
-    const key = `${prefix}${String(day).padStart(2, '0')}`;
-    cells.push(`<button type="button" class="study-mini-cell${studied.has(key) ? ' is-done' : ''}${key === today ? ' is-today' : ''}${key === selected ? ' is-selected' : ''}" data-log-date="${key}" aria-pressed="${key === selected}">${day}</button>`);
+  const dailyCounts = new Map();
+  for (const session of sessions) {
+    if (!session.date.startsWith(prefix)) continue;
+    const entry = dailyCounts.get(session.date) || { items: 0, rounds: 0 };
+    entry.items += session.itemCount;
+    entry.rounds += 1;
+    dailyCounts.set(session.date, entry);
   }
-  const monthLabel = L(`${year}년 ${month}월`, `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year}`);
-  return `
-    <div class="study-mini-cal" aria-label="${L('학습 출석 달력', 'Study calendar')}">
-      <div class="study-mini-head">
-        <button type="button" class="study-mini-nav" data-log-month="-1" aria-label="${L('이전 달', 'Previous month')}">‹</button>
-        <strong>${monthLabel}</strong>
-        <button type="button" class="study-mini-nav" data-log-month="1" aria-label="${L('다음 달', 'Next month')}">›</button>
-      </div>
-      <div class="study-mini-grid">
-        ${L(['일', '월', '화', '수', '목', '금', '토'], ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map((name) => `<span class="study-mini-weekday">${name}</span>`).join('')}
-        ${cells.join('')}
-      </div>
-    </div>`;
+  const maxActivity = Math.max(1, ...[...dailyCounts.values()].map(({ items, rounds }) => Math.max(items, rounds)));
+  const level = (entry) => entry
+    ? Math.min(4, Math.max(1, Math.ceil((Math.max(entry.items, entry.rounds) / maxActivity) * 4)))
+    : 0;
+  const cells = [];
+  for (let blank = 0; blank < new Date(year, month - 1, 1).getDay(); blank += 1) {
+    cells.push('<span class="study-log-calendar-cell is-empty"></span>');
+  }
+  for (let day = 1; day <= new Date(year, month, 0).getDate(); day += 1) {
+    const date = `${prefix}${String(day).padStart(2, '0')}`;
+    const entry = dailyCounts.get(date);
+    const items = entry?.items || 0;
+    const dateLabel = L(`${month}월 ${day}일`, `${date}`);
+    const activityLabel = items ? L(`, ${items}개 학습`, `, ${items} cards studied`) : '';
+    cells.push(`<button type="button" class="study-log-calendar-cell level-${level(entry)}${date === selectedDate ? ' is-selected' : ''}${date === localDateForExport() ? ' is-today' : ''}" data-log-date="${date}" aria-label="${dateLabel}${activityLabel}" aria-pressed="${date === selectedDate}"${entry ? ` title="${dateLabel} · ${items}${L('개 학습', ' cards studied')}"` : ` title="${dateLabel}"`}>${day}</button>`);
+  }
+  return `<section class="study-log-calendar" aria-label="${L('월간 학습 달력', 'Monthly study calendar')}">
+    <div class="study-log-calendar-weekdays">${L(['일', '월', '화', '수', '목', '금', '토'], ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day) => `<span>${day}</span>`).join('')}</div>
+    <div class="study-log-calendar-grid">${cells.join('')}</div>
+  </section>`;
+}
+
+function studyLogYearGrassHTML(sessions) {
+  const dailyCounts = new Map();
+  for (const session of sessions) {
+    const entry = dailyCounts.get(session.date) || { items: 0, rounds: 0 };
+    entry.items += session.itemCount;
+    entry.rounds += 1;
+    dailyCounts.set(session.date, entry);
+  }
+  const start = new Date(0);
+  start.setFullYear(state.logYear, 0, 1);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  const end = new Date(0);
+  end.setFullYear(state.logYear, 11, 31);
+  end.setHours(0, 0, 0, 0);
+  const weeks = [];
+  const maxActivity = Math.max(1, ...[...dailyCounts]
+    .filter(([date]) => date.startsWith(`${state.logYear}-`))
+    .map(([, { items, rounds }]) => Math.max(items, rounds)));
+  const level = (entry) => entry
+    ? Math.min(4, Math.max(1, Math.ceil((Math.max(entry.items, entry.rounds) / maxActivity) * 4)))
+    : 0;
+  const monthLabels = L(['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'], ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 7)) {
+    const weekStart = new Date(cursor);
+    let monthLabel = '';
+    const days = [];
+    for (let weekday = 0; weekday < 7; weekday += 1) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + weekday);
+      if (date.getFullYear() !== state.logYear) {
+        days.push('<span class="study-log-grass-cell is-empty"></span>');
+        continue;
+      }
+      if (date.getDate() === 1) monthLabel = monthLabels[date.getMonth()];
+      const key = `${state.logYear}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const entry = dailyCounts.get(key);
+      const items = entry?.items || 0;
+      const dateLabel = `${key} · ${items}${L('개 학습', ' cards studied')}`;
+      days.push(`<span class="study-log-grass-cell level-${level(entry)}" title="${dateLabel}" aria-label="${dateLabel}"></span>`);
+    }
+    weeks.push(`<div class="study-log-grass-week"><span class="study-log-grass-month">${monthLabel}</span>${days.join('')}</div>`);
+  }
+  return `<div class="study-log-grass-scroll"><div class="study-log-grass" role="group" aria-label="${L(`${state.logYear}년 학습 잔디`, `${state.logYear} study activity`)}">${weeks.join('')}</div><div class="study-log-grass-legend">${L('적게', 'Less')} <span class="study-log-grass-cell level-1"></span><span class="study-log-grass-cell level-2"></span><span class="study-log-grass-cell level-3"></span><span class="study-log-grass-cell level-4"></span> ${L('많이', 'More')}</div></div>`;
 }
 
 function studyLogPreviewBodyHTML() {
   if (state.logPreviewError) return `<p class="study-log-preview-empty is-error" role="alert">${esc(state.logPreviewError)}</p>`;
   const records = state.studyRecords;
   if (!records) return `<p class="study-log-preview-empty" role="status">${L('불러오는 중…', 'Loading…')}</p>`;
-  if (state.logPreviewView === 'detailed') {
-    const totalItems = records.sessions.reduce((sum, session) => sum + session.itemCount, 0);
-    const totalSeconds = records.sessions.reduce((sum, session) => sum + studySessionSeconds(session), 0);
-    return `
-      ${studyContributionHTML(records.sessions)}
-      <div class="study-log-stats study-log-stats-total">
-        <div><span>${L('총 학습 카드 수', 'Total cards studied')}</span><strong>${totalItems}${L('개', '')}</strong></div>
-        <div><span>${L('총 학습 시간', 'Total study time')}</span><strong>${formatStudyTime(totalSeconds * 1000)}</strong></div>
-      </div>`;
-  }
-  const selected = state.logSelectedDate || localDateForExport();
-  const days = records.sessions.filter((session) => String(session.date).slice(0, 10) === selected);
-  const items = days.reduce((sum, session) => sum + session.itemCount, 0);
-  const seconds = days.reduce((sum, session) => sum + studySessionSeconds(session), 0);
-  const isToday = selected === localDateForExport();
-  const monthSessions = records.sessions.filter((session) => String(session.date).startsWith(state.logCalMonth));
-  const monthItems = monthSessions.reduce((sum, session) => sum + session.itemCount, 0);
-  const monthSeconds = monthSessions.reduce((sum, session) => sum + studySessionSeconds(session), 0);
-  const monthNumber = Number(state.logCalMonth.slice(5, 7));
-  const monthName = L(`${monthNumber}월`, ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthNumber - 1]);
-  return `
-    ${studyMonthMiniHTML(records.sessions, selected)}
-    <div class="study-log-stats-pair">
-    <div class="study-log-stats">
-      <div><span>${isToday ? L('일일 학습 시간', 'Study time today') : L(`${selected} 학습 시간`, `Study time ${selected}`)}</span><strong>${formatStudyTime(seconds * 1000)}</strong></div>
-      <div><span>${isToday ? L('일일 학습 카드 수', 'Cards studied today') : L(`${selected} 학습 카드 수`, `Cards studied ${selected}`)}</span><strong>${items}${L('개', '')}</strong></div>
-    </div>
-    <div class="study-log-stats is-monthly">
-      <div><span>${L(`${monthName} 학습 시간`, `${monthName} study time`)}</span><strong>${formatStudyTime(monthSeconds * 1000)}</strong></div>
-      <div><span>${L(`${monthName} 학습 카드 수`, `${monthName} cards studied`)}</span><strong>${monthItems}${L('개', '')}</strong></div>
-    </div>
+  const sessions = records.sessions;
+  const error = state.logDeleteError ? `<p class="study-log-action-error" role="alert">${esc(state.logDeleteError)}</p>` : '';
+
+  if (state.logPreviewView === 'monthly') {
+    const selected = state.logSelectedDate || localDateForExport();
+    const monthSessions = sessions.filter((session) => session.date.startsWith(state.logCalMonth));
+    const selectedSessions = sessions
+      .map((session, index) => ({ session, index }))
+      .filter(({ session }) => session.date === selected);
+    return `<div class="study-log-monthly">
+      <div class="study-log-monthly-calendar">
+        ${studyLogPeriodNavHTML()}
+        ${studyLogCalendarHTML(sessions, selected)}
+      </div>
+      <section class="study-log-day-detail" aria-label="${L('선택한 날짜의 학습 기록', 'Study sessions for selected day')}">
+        <h3>${selected}</h3>
+        ${error}
+        ${studyLogDailySessionsHTML(selectedSessions)}
+      </section>
+      <aside class="study-log-month-total" aria-label="${L('이번 달 누적 기록', 'Monthly totals')}">
+        <h3>${L('이번 달 누적', 'Monthly total')}</h3>
+        ${studyLogStatsHTML(monthSessions, L('월간', 'Monthly'))}
+        <p>${L(`${monthSessions.length}회차`, `${monthSessions.length} study rounds`)}</p>
+      </aside>
     </div>`;
+  }
+
+  const yearSessions = sessions.filter((session) => Number(session.date.slice(0, 4)) === state.logYear);
+  const studyDays = new Set(yearSessions.map((session) => session.date)).size;
+  return `<div class="study-log-yearly">
+    <div class="study-log-yearly-activity">
+      ${studyLogPeriodNavHTML()}
+      ${studyLogYearGrassHTML(yearSessions)}
+    </div>
+    <aside class="study-log-year-total" aria-label="${L('연간 누적 기록', 'Yearly totals')}">
+      <h3>${L('연간 누적', 'Yearly total')}</h3>
+      ${studyLogStatsHTML(yearSessions, L('연간', 'Yearly'))}
+      <p>${L(`${studyDays}일 학습 · ${yearSessions.length}회차`, `${studyDays} study days · ${yearSessions.length} rounds`)}</p>
+    </aside>
+    ${error}
+  </div>`;
 }
 
 function studyLogPreviewHTML() {
   const failed = Boolean(state.logPreviewError) || !state.studyRecords;
   const view = state.logPreviewView;
   const toggle = (id, label) => `<button type="button" class="learning-status-view-button${view === id ? ' is-active' : ''}" data-log-view="${id}" aria-pressed="${view === id}"${failed ? ' disabled' : ''}>${label}</button>`;
-  return `<section class="study-log-preview ls-section${failed ? ' is-disabled' : ''}${view === 'detailed' ? ' is-detailed' : ''}${state.collapsedSections.log ? ' is-collapsed' : ''}" data-ls-section="log" data-log-preview aria-label="${L('나의 기록', 'My Log')}">
+  return `<section class="study-log-preview ls-section${failed ? ' is-disabled' : ''}${state.collapsedSections.log ? ' is-collapsed' : ''}" data-ls-section="log" data-log-preview aria-label="${L('나의 기록', 'My Log')}">
         <div class="study-log-preview-title">
           ${sectionToggleHTML('log', L('나의 기록', 'MY LOG'))}
-          <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">${toggle('simple', L('간단히', 'Simple'))}${toggle('detailed', L('자세히', 'Detailed'))}</div>
+          <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">${toggle('monthly', L('월별', 'Monthly'))}${toggle('yearly', L('연별', 'Yearly'))}</div>
         </div>
         <div class="study-log-preview-body" data-log-preview-body>${studyLogPreviewBodyHTML()}</div>
       </section>`;
@@ -3695,27 +3802,67 @@ function bindStudyLogPreview() {
     card.outerHTML = studyLogPreviewHTML();
     bindStudyLogPreview();
     persistUserPreferences();
-    const scroll = appEl.querySelector('.study-contrib-scroll');
-    if (scroll) scroll.scrollLeft = scroll.scrollWidth;
   }));
   const refreshBody = () => {
     const body = appEl.querySelector('[data-log-preview-body]');
     if (body) body.innerHTML = studyLogPreviewBodyHTML();
-    bindStudyLogCalendar();
+    bindStudyLogActions();
   };
-  function bindStudyLogCalendar() {
-    appEl.querySelectorAll('[data-log-date]').forEach((cell) => cell.addEventListener('click', () => {
-      state.logSelectedDate = cell.dataset.logDate;
+  async function deleteStudySession(index) {
+    if (state.logSessionDeleting || !state.studyRecords || !state.project) return;
+    if (!window.confirm(L(
+      '이 My Log 회차 기록만 삭제할까요? FSRS 복습 기록은 삭제되지 않습니다.',
+      'Delete only this My Log session? FSRS review history will not be deleted.'
+    ))) return;
+    const projectName = state.project.name;
+    const currentRecords = state.studyRecords;
+    state.logSessionDeleting = true;
+    state.logDeleteError = '';
+    render();
+    try {
+      const nextRecords = removeStudySession(currentRecords, index);
+      await writeStudyRecordFile(projectName, nextRecords);
+      if (state.project?.name === projectName) state.studyRecords = nextRecords;
+    } catch (error) {
+      console.error('Could not delete the study session.', error);
+      if (state.project?.name === projectName) {
+        state.logDeleteError = L(
+          `학습 회차 기록을 삭제하지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+          `Could not delete the study session: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    } finally {
+      state.logSessionDeleting = false;
+      render();
+    }
+  }
+  function bindStudyLogActions() {
+    appEl.querySelectorAll('[data-log-date]').forEach((button) => button.addEventListener('click', () => {
+      state.logSelectedDate = button.dataset.logDate;
       refreshBody();
     }));
-    appEl.querySelectorAll('[data-log-month]').forEach((button) => button.addEventListener('click', () => {
-      const [year, month] = state.logCalMonth.split('-').map(Number);
-      const next = new Date(year, month - 1 + Number(button.dataset.logMonth), 1);
-      state.logCalMonth = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+    appEl.querySelectorAll('[data-log-step]').forEach((button) => button.addEventListener('click', () => {
+      const [unit, amount] = button.dataset.logStep.split(':');
+      const step = Number(amount);
+      if (unit === 'month') {
+        const [year, month] = state.logCalMonth.split('-').map(Number);
+        const next = new Date(0);
+        next.setFullYear(year, month - 1 + step, 1);
+        state.logCalMonth = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+        const selectedDay = Number((state.logSelectedDate || localDateForExport()).slice(8, 10));
+        const [nextYear, nextMonth] = state.logCalMonth.split('-').map(Number);
+        const day = Math.min(selectedDay, new Date(nextYear, nextMonth, 0).getDate());
+        state.logSelectedDate = `${state.logCalMonth}-${String(day).padStart(2, '0')}`;
+      } else if (unit === 'year') {
+        state.logYear = Math.max(1, Math.min(9999, state.logYear + step));
+      }
       refreshBody();
+    }));
+    appEl.querySelectorAll('[data-log-delete]').forEach((button) => button.addEventListener('click', () => {
+      deleteStudySession(Number(button.dataset.logDelete));
     }));
   }
-  bindStudyLogCalendar();
+  bindStudyLogActions();
 }
 
 async function loadStudyLogPreview() {
@@ -3735,56 +3882,6 @@ async function loadStudyLogPreview() {
       bindStudyLogPreview();
     }
   }
-}
-
-function studyContributionHTML(sessions) {
-  const byDate = new Map();
-  for (const session of sessions) {
-    const date = String(session.date).slice(0, 10);
-    const entry = byDate.get(date) || { items: 0, count: 0 };
-    entry.items += session.itemCount;
-    entry.count += 1;
-    byDate.set(date, entry);
-  }
-  const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const end = new Date();
-  end.setHours(0, 0, 0, 0);
-  const start = new Date(end);
-  start.setDate(start.getDate() - 52 * 7 - end.getDay());
-  const max = Math.max(1, ...[...byDate.values()].map((entry) => entry.items));
-  const level = (items) => (items ? Math.min(4, Math.max(1, Math.ceil((items / max) * 4))) : 0);
-  const monthNames = L(['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'], ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
-  const weeks = [];
-  let studiedDays = 0;
-  let lastMonth = -1;
-  let lastLabelAt = -99;
-  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 7)) {
-    const days = [];
-    for (let i = 0; i < 7; i += 1) {
-      const day = new Date(cursor);
-      day.setDate(day.getDate() + i);
-      if (day > end) { days.push('<span class="study-contrib-cell is-empty"></span>'); continue; }
-      const key = iso(day);
-      const entry = byDate.get(key);
-      if (entry) studiedDays += 1;
-      const label = entry
-        ? L(`${key} · ${entry.count}회차 · ${entry.items}항목`, `${key} · ${entry.count} rounds · ${entry.items} items`)
-        : L(`${key} · 학습 없음`, `${key} · no study`);
-      days.push(`<span class="study-contrib-cell level-${level(entry?.items || 0)}" title="${label}"></span>`);
-    }
-    const month = cursor.getMonth();
-    const showMonth = month !== lastMonth && weeks.length - lastLabelAt >= 3;
-    const monthLabel = showMonth ? monthNames[month] : '';
-    if (showMonth) lastLabelAt = weeks.length;
-    lastMonth = month;
-    weeks.push(`<div class="study-contrib-week"><span class="study-contrib-month">${monthLabel}</span>${days.join('')}</div>`);
-  }
-  return `
-    <section class="study-contrib" aria-label="${L('학습 기록 잔디','Study contribution graph')}">
-      <p class="study-contrib-title">${L(`최근 1년간 ${studiedDays}일 학습`, `${studiedDays} day${studiedDays === 1 ? '' : 's'} studied in the last year`)}</p>
-      <div class="study-contrib-scroll"><div class="study-contrib-grid"><div class="study-contrib-week study-contrib-days"><span class="study-contrib-month"></span>${L(['','월','','수','','금',''],['','Mon','','Wed','','Fri','']).map((d) => `<span class="study-contrib-day">${d}</span>`).join('')}</div>${weeks.join('')}</div></div>
-      <div class="study-contrib-legend">${L('적게', 'Less')} ${[0, 1, 2, 3, 4].map((n) => `<span class="study-contrib-cell level-${n}"></span>`).join('')} ${L('많이', 'More')}</div>
-    </section>`;
 }
 
 function retentionStyleDialogHTML() {
@@ -4951,6 +5048,7 @@ async function finishStudy(askForConfirmation = false, returnPage = 'study') {
     }
     await writeStudyRecordFile(state.project.name, session.pendingSave.records);
     state.studyRecords = null;
+    state.logDeleteError = '';
     if (!(await save())) throw new Error(state.error || L('프로젝트 정보를 저장하지 못했어요.', 'Could not save project information.'));
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     state.study = null;
