@@ -3745,6 +3745,7 @@ function studyLogPreviewBodyHTML() {
     const selectedSessions = sessions
       .map((session, index) => ({ session, index }))
       .filter(({ session }) => session.date === selected);
+    const dailySessions = selectedSessions.map(({ session }) => session);
     return `<div class="study-log-monthly">
       <div class="study-log-monthly-calendar">
         ${studyLogPeriodNavHTML()}
@@ -3755,6 +3756,11 @@ function studyLogPreviewBodyHTML() {
         ${error}
         ${studyLogDailySessionsHTML(selectedSessions)}
       </section>
+      <aside class="study-log-day-total" aria-label="${L('일일 누적 기록', 'Daily totals')}">
+        <h3>${L('일일 누적', 'Daily total')}</h3>
+        ${studyLogStatsHTML(dailySessions, L('일일', 'Daily'))}
+        <p>${L(`${dailySessions.length}회차`, `${dailySessions.length} study rounds`)}</p>
+      </aside>
       <aside class="study-log-month-total" aria-label="${L('이번 달 누적 기록', 'Monthly totals')}">
         <h3>${L('이번 달 누적', 'Monthly total')}</h3>
         ${studyLogStatsHTML(monthSessions, L('월간', 'Monthly'))}
