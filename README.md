@@ -105,6 +105,7 @@ You can use different folders as separate workspaces for different sets of proje
 ## Data storage and privacy
 
 ESPER fetches tutorial and guide assets from its website when needed.<br>
+The main app uses Google Analytics 4 to measure visits and usage. Loading the app sends analytics data to Google, which may include browser, device, and interaction information. See [Google's Privacy Policy](https://policies.google.com/privacy).<br>
 Third-party sites are contacted only when you choose to open their links; their privacy policies apply when you visit them.
 
 <br><br>
