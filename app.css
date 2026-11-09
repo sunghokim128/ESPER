@@ -3150,7 +3150,7 @@ body:has(.app-shell.workspace-page) {
 @media print {
   html,
   body {
-    background: #fff;
+    background: transparent;
   }
 
   .support-widget {
@@ -3172,6 +3172,9 @@ body:has(.app-shell.workspace-page) {
   .print-root .sheet {
     position: static;
     box-shadow: none;
+    background: transparent;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
     break-after: page;
     page-break-after: always;
   }
