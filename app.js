@@ -4340,13 +4340,12 @@ function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLab
     </div>`;
 }
 
-function a4PrintSheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLabel = '') {
+function a4PrintSheetHTML(rows, pageNumber, pageCount, isLastPage = false) {
   return `<div class="sheet a4-sheet a4-print-sheet${isLastPage ? ' a4-last-page' : ''}">
       <div class="sheet-head">
         <div>
           <div class="sheet-title">${esc(a4SheetTitle())}</div>
           <div class="sheet-meta">${esc(a4SheetInfo())}</div>
-          ${sectionLabel ? `<div class="sheet-section-label">${esc(sectionLabel)}</div>` : ''}
         </div>
         <div class="sheet-pageno">${pageNumber} / ${pageCount}</div>
       </div>
@@ -4696,9 +4695,9 @@ async function handleA4Print() {
   const totalPages = list.length;
   if (!totalPages) return;
   printEl.innerHTML = list
-    .map(({ rows, section, sectionStart }, i) => {
+    .map(({ rows }, i) => {
       const isLastPage = i === list.length - 1;
-      return a4PrintSheetHTML(rows, i + 1, totalPages, isLastPage, a4SectionLabel(section, sectionStart));
+      return a4PrintSheetHTML(rows, i + 1, totalPages, isLastPage);
     })
     .join('');
   hydrateRenderedImages();

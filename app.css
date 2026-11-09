@@ -3153,6 +3153,10 @@ body:has(.app-shell.workspace-page) {
     background: #fff;
   }
 
+  .support-widget {
+    display: none !important;
+  }
+
   .app-shell {
     display: none !important;
   }
