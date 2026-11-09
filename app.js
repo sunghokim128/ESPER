@@ -3651,7 +3651,7 @@ function studyLogDailySessionsHTML(sessions) {
       <strong>${L(`${round + 1}회차`, `Round ${round + 1}`)}</strong>
       <span>${L('학습 카드', 'Cards studied')} <b>${session.itemCount}${L('개', '')}</b></span>
       <span>${L('학습 시간', 'Study time')} <b>${formatStudyTime(studySessionSeconds(session) * 1000)}</b></span>
-      <button type="button" class="study-log-delete" data-log-delete="${index}"${state.logSessionDeleting ? ' disabled' : ''}>${state.logSessionDeleting ? L('삭제 중…', 'Deleting…') : L('삭제', 'Delete')}</button>
+      <button type="button" class="study-log-delete" data-log-delete="${index}" aria-label="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}" title="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}"${state.logSessionDeleting ? ' disabled' : ''}>×</button>
     </article>`).join('')}</div>`;
 }
 

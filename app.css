@@ -6803,8 +6803,8 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .study-log-session { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, auto) auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #f8f6f2; font-size: 11px; }
 .study-log-session > span { min-width: 0; color: var(--muted); line-height: 1.35; }
 .study-log-session > span b { color: var(--ink); font-weight: 650; white-space: nowrap; }
-.study-log-delete { min-height: 30px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--danger); font: inherit; cursor: pointer; }
-.study-log-delete:hover:not(:disabled) { border-color: var(--danger); }
+.study-log-delete { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--danger); font: 22px/1 inherit; cursor: pointer; }
+.study-log-delete:hover:not(:disabled) { background: #f8e9e5; }
 .study-log-delete:disabled { cursor: wait; opacity: .6; }
 .study-log-empty,
 .study-log-action-error { margin: 0; color: var(--muted); font-size: 12px; }
