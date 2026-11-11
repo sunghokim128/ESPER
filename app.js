@@ -1334,7 +1334,7 @@ async function importWorkbookFile(file, images = []) {
     state.showAllA4Values = true;
     state.a4Title = null;
     state.a4Info = null;
-    state.a4Order = shuffleA4Order(items);
+    state.a4Order = items.map((item) => item.id);
     state.a4Query = '';
     state.sourceName = file.name;
     state.title = project.title;
@@ -1778,7 +1778,7 @@ async function openProject(id, destination = 'study') {
     state.hiddenA4Values = new Set();
     state.expandedA4Hints = new Set();
     state.showAllA4Values = true;
-    state.a4Order = shuffleA4Order(state.pairs);
+    state.a4Order = state.pairs.map((pair) => pair.id);
     state.a4Query = '';
     await startStudy();
     if (destination !== 'study') await routeToProjectDestination(destination);
