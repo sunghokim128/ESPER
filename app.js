@@ -79,11 +79,11 @@ const DEFAULT_STUDY_SETTINGS = {
   showHintOnBack: true,
   swapKeyValue: false,
   randomizeKeyValue: false,
-  fontSizes: { front: 72, back: 43 },
+  fontSizes: { front: 72, back: 43, hintFront: 26, hintBack: 26 },
   examDate: '',
   desiredRetention: DEFAULT_DESIRED_RETENTION,
   imageSizes: { study: 55, a4: 'medium', status: 'medium' },
-  imageHeights: { front: 55, back: 55 },
+  imageHeights: { front: 55, back: 55, hintFront: 55, hintBack: 55 },
   a4ImageHeight: 14,
   retentionStyle: { color: '#8f3f26', strength: 40, half: 70 },
   shortcuts: {
@@ -424,6 +424,12 @@ function normalizeStudySettings(settings) {
       back: Number.isFinite(Number(settings?.fontSizes?.back))
         ? Math.min(72, Math.max(16, Number(settings.fontSizes.back)))
         : DEFAULT_STUDY_SETTINGS.fontSizes.back,
+      hintFront: Number.isFinite(Number(settings?.fontSizes?.hintFront))
+        ? Math.min(72, Math.max(12, Number(settings.fontSizes.hintFront)))
+        : DEFAULT_STUDY_SETTINGS.fontSizes.hintFront,
+      hintBack: Number.isFinite(Number(settings?.fontSizes?.hintBack))
+        ? Math.min(72, Math.max(12, Number(settings.fontSizes.hintBack)))
+        : DEFAULT_STUDY_SETTINGS.fontSizes.hintBack,
     },
     examDate: /^\d{4}-\d{2}-\d{2}$/.test(settings?.examDate || '') ? settings.examDate : '',
     desiredRetention: normalizeDesiredRetention(settings?.desiredRetention ?? DEFAULT_DESIRED_RETENTION),
@@ -432,10 +438,13 @@ function normalizeStudySettings(settings) {
       if (view === 'study') return [view, normalizeStudyImageHeight(saved)];
       return [view, IMAGE_SIZE_IDS.includes(saved) ? saved : DEFAULT_STUDY_SETTINGS.imageSizes[view]];
     })),
-    imageHeights: Object.fromEntries(['front', 'back'].map((side) => [
-      side,
-      normalizeStudyImageHeight(settings?.imageHeights?.[side] ?? settings?.imageSizes?.study),
-    ])),
+    imageHeights: Object.fromEntries(['front', 'back', 'hintFront', 'hintBack'].map((field) => {
+      const legacyField = field.startsWith('hint') ? field.slice(4).toLowerCase() : field;
+      return [
+        field,
+        normalizeStudyImageHeight(settings?.imageHeights?.[field] ?? settings?.imageHeights?.[legacyField] ?? settings?.imageSizes?.study),
+      ];
+    })),
     a4ImageHeight: normalizeA4ImageHeight(settings?.a4ImageHeight ?? settings?.imageSizes?.a4),
     retentionStyle: normalizeRetentionStyle(settings?.retentionStyle),
     shortcuts,
@@ -482,29 +491,28 @@ function fitStudyCardText() {
   if (!face || !primaryText) return;
 
   const side = primaryText.classList.contains('study-key') ? 'front' : 'back';
-  const baseSize = state.studySettings.fontSizes[side];
-  const texts = side === 'back'
-    ? [primaryText, ...face.querySelectorAll('.study-back-extras .study-hint')]
-    : [primaryText];
-  texts.forEach((text) => {
-    text.style.maxHeight = 'none';
-    text.style.overflowY = 'visible';
+  const fields = [
+    { element: primaryText, field: side },
+    ...[...face.querySelectorAll('.study-hint')].map((element) => ({ element, field: `hint${side === 'front' ? 'Front' : 'Back'}` })),
+  ];
+  fields.forEach(({ element }) => {
+    element.style.maxHeight = 'none';
+    element.style.overflowY = 'visible';
   });
-  let low = 12;
-  let high = baseSize;
-  let best = low;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const size = Math.floor((low + high) / 2);
-    texts.forEach((text) => { text.style.fontSize = `${size}px`; });
-    if (face.scrollHeight <= face.clientHeight + 1) {
-      best = size;
-      low = size + 1;
-    } else {
-      high = size - 1;
-    }
+  const minimumScale = Math.max(...fields.map(({ field }) => 12 / state.studySettings.fontSizes[field]));
+  let low = minimumScale;
+  let high = 1;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const scale = (low + high) / 2;
+    fields.forEach(({ element, field }) => {
+      element.style.fontSize = `${state.studySettings.fontSizes[field] * scale}px`;
+    });
+    if (face.scrollHeight <= face.clientHeight + 1) low = scale;
+    else high = scale;
   }
-  const fittedSize = `${Math.max(12, Math.min(baseSize, best))}px`;
-  texts.forEach((text) => { text.style.fontSize = fittedSize; });
+  fields.forEach(({ element, field }) => {
+    element.style.fontSize = `${Math.max(12, state.studySettings.fontSizes[field] * low)}px`;
+  });
 }
 
 window.addEventListener('resize', fitStudyCardText);
@@ -519,6 +527,8 @@ function applyImageSizes() {
   const heights = state.studySettings.imageHeights;
   document.documentElement.style.setProperty('--study-img-h-front', String(heights.front));
   document.documentElement.style.setProperty('--study-img-h-back', String(heights.back));
+  document.documentElement.style.setProperty('--study-img-h-hint-front', String(heights.hintFront));
+  document.documentElement.style.setProperty('--study-img-h-hint-back', String(heights.hintBack));
   document.documentElement.style.setProperty('--a4-img-h', `${state.studySettings.a4ImageHeight}mm`);
   const retentionColor = state.studySettings.retentionStyle.color;
   document.documentElement.style.setProperty('--retention-rgb', [1, 3, 5].map((i) => parseInt(retentionColor.slice(i, i + 2), 16)).join(', '));
@@ -548,33 +558,36 @@ function currentStudySide() {
 
 const STUDY_FONT_RANGE = { front: { min: 18, max: 120 }, back: { min: 16, max: 72 } };
 
-function cardSizeControlsHTML(side, attr, hasImage = true) {
+function cardSizeControlsHTML(side, field, fieldLabel, hasImage = true) {
   const settings = state.studySettings;
-  const font = STUDY_FONT_RANGE[side];
+  const font = field.startsWith('hint') ? { min: 12, max: 72 } : STUDY_FONT_RANGE[side];
   const sideLabel = side === 'front' ? L('앞면', 'Front') : L('뒷면', 'Back');
   return `
-    <label class="study-font-setting">
-      <span>${L('글자', 'Text')}</span>
-      <input type="range" min="${font.min}" max="${font.max}" step="1" data-${attr}-font value="${settings.fontSizes[side]}" aria-label="${sideLabel} ${L('글자 크기', 'text size')}">
-      <output>${settings.fontSizes[side]}px</output>
-    </label>
-    <label class="study-font-setting${hasImage ? '' : ' is-disabled'}"${hasImage ? '' : ` title="${L('이 면에는 이미지가 없어요', 'No image on this side')}"`}>
-      <span>${L('이미지', 'Image')}</span>
-      <input type="range" min="${STUDY_IMAGE_HEIGHT_RANGE.min}" max="${STUDY_IMAGE_HEIGHT_RANGE.max}" step="1"${hasImage ? '' : ' disabled'} data-${attr}-image value="${settings.imageHeights[side]}" aria-label="${sideLabel} ${L('이미지 크기', 'image size')}">
-      <output>${settings.imageHeights[side]}</output>
-    </label>`;
+    <div class="study-size-group">
+      <h3>${fieldLabel}</h3>
+      <label class="study-font-setting">
+        <span>${L('글자', 'Text')}</span>
+        <input type="range" min="${font.min}" max="${font.max}" step="1" data-study-font="${field}" value="${settings.fontSizes[field]}" aria-label="${sideLabel} ${fieldLabel} ${L('글자 크기', 'text size')}">
+        <output>${settings.fontSizes[field]}px</output>
+      </label>
+      <label class="study-font-setting${hasImage ? '' : ' is-disabled'}"${hasImage ? '' : ` title="${L('이 항목에는 이미지가 없어요', 'No image in this field')}"`}>
+        <span>${L('이미지', 'Image')}</span>
+        <input type="range" min="${STUDY_IMAGE_HEIGHT_RANGE.min}" max="${STUDY_IMAGE_HEIGHT_RANGE.max}" step="1"${hasImage ? '' : ' disabled'} data-study-image="${field}" value="${settings.imageHeights[field]}" aria-label="${sideLabel} ${fieldLabel} ${L('이미지 크기', 'image size')}">
+        <output>${settings.imageHeights[field]}</output>
+      </label>
+    </div>`;
 }
 
-function setCardSize(side, kind, rawValue) {
+function setCardSize(field, kind, rawValue) {
   const settings = state.studySettings;
   if (kind === 'font') {
-    const { min, max } = STUDY_FONT_RANGE[side];
-    settings.fontSizes[side] = Math.min(max, Math.max(min, Number(rawValue)));
-    return settings.fontSizes[side];
+    const { min, max } = field.startsWith('hint') ? { min: 12, max: 72 } : STUDY_FONT_RANGE[field];
+    settings.fontSizes[field] = Math.min(max, Math.max(min, Number(rawValue)));
+    return settings.fontSizes[field];
   }
-  settings.imageHeights[side] = normalizeStudyImageHeight(rawValue);
+  settings.imageHeights[field] = normalizeStudyImageHeight(rawValue);
   applyImageSizes();
-  return settings.imageHeights[side];
+  return settings.imageHeights[field];
 }
 
 function closeProjectMenus() {
@@ -3449,25 +3462,30 @@ async function refreshExamSummary() {
   }
 }
 
-function studyFaceHasImage() {
+function studyFaceHasImage(target = 'primary') {
   const session = state.study;
   const pair = session?.started ? studyCurrentPair() : null;
   if (!pair) return true;
   const shown = studyShownPair(pair);
   const has = (text) => /\[img:/.test(String(text ?? ''));
+  if (target === 'hint') return has(pair.hint);
   return session.flipped
-    ? has(shown.value) || ((state.studySettings.showHintOnBack || session.showBackHint) && has(pair.hint))
-    : has(shown.key) || (session.hintOpen && has(pair.hint));
+    ? has(shown.value)
+    : has(shown.key);
 }
 
 function studySettingsHTML() {
   const settings = state.studySettings;
+  const side = currentStudySide();
+  const hintField = side === 'front' ? 'hintFront' : 'hintBack';
+  const primaryLabel = side === 'front' ? 'key' : 'value';
   return `
     <div class="study-settings-panel" id="studySettingsPanel" aria-label="${L('설정', 'Settings')}">
       <section class="study-setting-card">
-        <h2>${currentStudySide() === 'front' ? L('카드 크기 · 앞면', 'Card size · Front') : L('카드 크기 · 뒷면', 'Card size · Back')}</h2>
-        ${cardSizeControlsHTML(currentStudySide(), 'study', studyFaceHasImage())}
-        <p class="study-font-setting-note">${L('지금 보고 있는 면의 모든 카드에 적용돼요. 글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Applies to this side of every card. Long text shrinks to fit the card.')}</p>
+        <h2>${side === 'front' ? L('카드 크기 · 앞면', 'Card size · Front') : L('카드 크기 · 뒷면', 'Card size · Back')}</h2>
+        ${cardSizeControlsHTML(side, side, L(primaryLabel, primaryLabel), studyFaceHasImage())}
+        ${cardSizeControlsHTML(side, hintField, L('hint', 'hint'), studyFaceHasImage('hint'))}
+        <p class="study-font-setting-note">${L('글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Long text shrinks to fit the card.')}</p>
       </section>
       <section class="study-setting-card">
         <h2>${L('힌트 표시', 'Hint display')}</h2>
@@ -4577,6 +4595,7 @@ function render() {
   appEl.innerHTML = pageHTML;
   renderProcessingIndicator();
   applyImageSizes();
+  if (state.page === 'study') fitStudyCardText();
   appEl.classList.toggle('home-page', state.page === 'home');
   appEl.classList.toggle('workspace-page', state.page === 'workspace');
   appEl.classList.toggle('a4-view-page', state.page === 'a4');
@@ -5820,19 +5839,18 @@ function attachStudy() {
     });
   });
 
-  [['font', 'data-study-font'], ['image', 'data-study-image']].forEach(([kind, attr]) => {
-    appEl.querySelectorAll(`[${attr}]`).forEach((input) => {
-      const update = () => {
-        const side = currentStudySide();
-        const value = setCardSize(side, kind, input.value);
-        input.nextElementSibling.textContent = kind === 'font' ? `${value}px` : String(value);
-        fitStudyCardText();
-      };
-      input.addEventListener('input', update);
-      input.addEventListener('change', async () => {
-        update();
-        if (!(await saveStudySettings())) render();
-      });
+  appEl.querySelectorAll('[data-study-font], [data-study-image]').forEach((input) => {
+    const kind = input.hasAttribute('data-study-font') ? 'font' : 'image';
+    const field = input.dataset.studyFont || input.dataset.studyImage;
+    const update = () => {
+      const value = setCardSize(field, kind, input.value);
+      input.nextElementSibling.textContent = kind === 'font' ? `${value}px` : String(value);
+      fitStudyCardText();
+    };
+    input.addEventListener('input', update);
+    input.addEventListener('change', async () => {
+      update();
+      if (!(await saveStudySettings())) render();
     });
   });
 
