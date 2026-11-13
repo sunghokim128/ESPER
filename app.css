@@ -5916,6 +5916,36 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
   line-height: 1.4;
 }
 
+.study-sidebar .study-time-limit {
+  justify-content: space-between;
+}
+
+.study-time-limit-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.study-time-limit-input {
+  width: 68px;
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: right;
+}
+
+.study-sidebar .study-time-limit-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .study-sidebar .study-font-setting-note {
   margin-top: 6px;
 }

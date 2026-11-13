@@ -28,6 +28,7 @@ Supported imports: Excel workbooks (`.xlsx`, `.xlsm`), Anki decks (`.apkg`), and
 4. **Study with active recall**<br>
    Try to remember the value before revealing it.<br>
    Use a hint if needed, then rate your recall **Again**, **Hard**, **Good**, or **Easy**.<br>
+   Each study round ends automatically after 30 minutes by default; change the limit in the study settings menu.<br>
    FSRS-7 uses your ratings to schedule future reviews.
 
 5. **Keep learning**<br>

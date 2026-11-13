@@ -75,7 +75,9 @@ import {
 } from './lib/studyPace.js?v=2';
 
 const EDIT_COLUMN_WIDTHS_KEY = 'esper.editColumnWidths.v1';
+const STUDY_TIME_LIMIT_RANGE = { min: 1, max: 1440 };
 const DEFAULT_STUDY_SETTINGS = {
+  roundTimeLimitMinutes: 30,
   showHintOnBack: true,
   swapKeyValue: false,
   randomizeKeyValue: false,
@@ -402,6 +404,10 @@ function shortcutKeyLabel(key) {
 
 function normalizeStudySettings(settings) {
   const savedShortcuts = settings?.shortcuts || {};
+  const savedTimeLimit = settings?.roundTimeLimitMinutes;
+  const roundTimeLimitMinutes = savedTimeLimit === '' || savedTimeLimit === null || savedTimeLimit === undefined
+    ? Number.NaN
+    : Number(savedTimeLimit);
   const shortcuts = { ...DEFAULT_STUDY_SETTINGS.shortcuts };
   for (const [action] of STUDY_ACTIONS) {
     const key = savedShortcuts[action] ?? (action === 'undo' ? savedShortcuts.previous : undefined);
@@ -412,6 +418,9 @@ function normalizeStudySettings(settings) {
     Object.assign(shortcuts, DEFAULT_STUDY_SETTINGS.shortcuts);
   }
   return {
+    roundTimeLimitMinutes: Number.isFinite(roundTimeLimitMinutes)
+      ? Math.min(STUDY_TIME_LIMIT_RANGE.max, Math.max(STUDY_TIME_LIMIT_RANGE.min, Math.round(roundTimeLimitMinutes)))
+      : DEFAULT_STUDY_SETTINGS.roundTimeLimitMinutes,
     showHintOnBack: typeof settings?.showHintOnBack === 'boolean'
       ? settings.showHintOnBack
       : DEFAULT_STUDY_SETTINGS.showHintOnBack,
@@ -3488,6 +3497,17 @@ function studySettingsHTML() {
         <p class="study-font-setting-note">${L('글이 길면 카드 안에 맞게 자동으로 작아져요.', 'Long text shrinks to fit the card.')}</p>
       </section>
       <section class="study-setting-card">
+        <h2>${L('회차 시간 제한', 'Round time limit')}</h2>
+        <label class="study-hint-setting study-time-limit">
+          <span>${L('한 회차 최대 시간', 'Maximum time per round')}</span>
+          <span class="study-time-limit-control">
+            <input class="study-time-limit-input" type="number" min="${STUDY_TIME_LIMIT_RANGE.min}" max="${STUDY_TIME_LIMIT_RANGE.max}" step="1" data-study-setting="roundTimeLimitMinutes" value="${settings.roundTimeLimitMinutes}" aria-label="${L('회차 시간 제한(분)', 'Round time limit (minutes)')}">
+            <span>${L('분', 'min')}</span>
+          </span>
+        </label>
+        <small class="study-time-limit-note">${L('제한 시간에 도달하면 회차 기록을 저장하고 자동 종료해요.', 'The round is automatically ended and saved when the time limit is reached.')}</small>
+      </section>
+      <section class="study-setting-card">
         <h2>${L('힌트 표시', 'Hint display')}</h2>
         <label class="study-hint-setting"><input type="checkbox" data-study-setting="showHintOnBack"${settings.showHintOnBack ? ' checked' : ''}> ${L('카드 뒷면에 hint 기본 표시', 'Show the hint on the card back by default')}</label>
       </section>
@@ -5028,7 +5048,7 @@ async function saveStudySettings() {
   }
 }
 
-async function finishStudy(askForConfirmation = false, returnPage = 'study') {
+async function finishStudy(askForConfirmation = false, returnPage = 'study', { timeLimitReached = false } = {}) {
   const session = state.study;
   if (state.pendingReview) {
     state.studyError = L(
@@ -5062,13 +5082,16 @@ async function finishStudy(askForConfirmation = false, returnPage = 'study') {
     if (!session.pendingSave) {
       const date = localDateForExport();
       const elapsed = Date.now() - session.startedAt;
+      const duration = timeLimitReached
+        ? Math.min(elapsed, session.settings.roundTimeLimitMinutes * 60_000)
+        : elapsed;
       const itemCount = [...session.seenIds].filter((id) => state.pairs.some((pair) => pair.id === id)).length;
       const recordFile = await readStudyRecordFile(state.project.name);
       session.pendingSave = {
         records: appendStudySession(recordFile, {
           date,
           itemCount,
-          durationSeconds: elapsed / 1000,
+          durationSeconds: duration / 1000,
         }),
       };
     }
@@ -5733,8 +5756,16 @@ function attachStudy() {
   if (studyTimerInterval) window.clearInterval(studyTimerInterval);
   const timer = document.getElementById('studyTimer');
   const updateTimer = () => {
-    if (timer && state.study) {
-      timer.textContent = formatStudyTime(Date.now() - state.study.startedAt);
+    const session = state.study;
+    if (!timer || !session?.started) return;
+    const elapsed = Date.now() - session.startedAt;
+    timer.textContent = formatStudyTime(elapsed);
+    if (
+      elapsed >= session.settings.roundTimeLimitMinutes * 60_000 &&
+      !state.pendingReview &&
+      !state.studySaving
+    ) {
+      void finishStudy(false, 'study', { timeLimitReached: true });
     }
   };
   if (state.study?.started) {
@@ -5819,7 +5850,8 @@ function attachStudy() {
   appEl.querySelectorAll('[data-study-setting]').forEach((input) => {
     input.addEventListener('change', async () => {
       const setting = input.dataset.studySetting;
-      state.studySettings[setting] = input.checked;
+      const value = input.type === 'checkbox' ? input.checked : input.value;
+      state.studySettings = normalizeStudySettings({ ...state.studySettings, [setting]: value });
       if (input.checked && setting === 'swapKeyValue') {
         state.studySettings.randomizeKeyValue = false;
       } else if (input.checked && setting === 'randomizeKeyValue') {
