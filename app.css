@@ -2365,16 +2365,39 @@ body:has(.app-shell.workspace-page) {
   visibility: hidden;
 }
 
-.a4-sheet .study-hint-content {
-  display: block;
+.a4-sheet button.study-hint-content {
+  display: none;
+  width: 100%;
+  margin: 0;
   padding-top: 0.4mm;
+  border: 0;
+  border-radius: 1mm;
+  background: transparent;
   color: var(--sheet-muted);
+  font: inherit;
   font-size: 7.25pt;
   font-weight: 400;
   line-height: 1.1;
+  text-align: left;
   overflow-wrap: break-word;
   word-break: normal;
   white-space: pre-line;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.a4-sheet button.study-hint-content:hover {
+  background: rgba(244, 236, 223, 0.62);
+  color: var(--ink);
+}
+
+.a4-sheet button.study-hint-content:focus-visible {
+  outline: 0.45mm solid #8d8d99;
+  outline-offset: 0.5mm;
+}
+
+.a4-sheet .study-sheet-row.study-hint-visible button.study-hint-content {
+  display: block;
 }
 
 .a4-print-sheet .col-key {
@@ -4184,6 +4207,28 @@ body:has(.app-shell.workspace-page) {
   background: rgba(255,255,255,.8);
   font-size: 12px;
   font-weight: 600;
+}
+
+.study-fullscreen-exit {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  place-items: center;
+  border-color: rgba(0, 0, 0, .16);
+  background: rgba(255, 255, 255, .82);
+  color: var(--ink);
+}
+
+.study-fullscreen-exit:hover {
+  background: #fff;
+}
+
+.fullscreen-exit-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .study-card.enter-known {
@@ -6853,6 +6898,9 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .study-log-preview .study-log-stats strong { font-size: 18px; }
 .study-log-session-list { display: grid; gap: 8px; }
 .study-log-session { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, auto) auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #f8f6f2; font-size: 11px; }
+.study-log-session.is-skimming { grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto; }
+.study-log-session-mode { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; background: #eee8df; color: #66594d; font-size: 9px; font-weight: 650; line-height: 1.4; vertical-align: middle; }
+.study-log-session-mode.is-skimming { background: #f2e3da; color: #873c24; }
 .study-log-session > span { min-width: 0; color: var(--muted); line-height: 1.35; }
 .study-log-session > span b { color: var(--ink); font-weight: 650; white-space: nowrap; }
 .study-log-delete { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--danger); font: 22px/1 inherit; cursor: pointer; }
@@ -6916,6 +6964,7 @@ button.study-log-calendar-cell:hover { outline: 1px solid #a45b40; }
   .study-log-preview .study-log-stats { justify-content: space-between; gap: 16px; }
   .study-log-session { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
   .study-log-session > span { text-align: right; }
+  .study-log-session.is-skimming { grid-template-columns: minmax(0, 1fr) auto; }
   .study-log-session > strong { grid-column: 1; }
   .study-log-session > span:nth-of-type(1) { grid-column: 1; grid-row: 2; text-align: left; }
   .study-log-session > span:nth-of-type(2) { grid-column: 2; grid-row: 2; }
@@ -6960,4 +7009,502 @@ button.study-log-calendar-cell:hover { outline: 1px solid #a45b40; }
 .study-log-preview.ls-section.is-collapsed { width: 100%; margin: 0; padding: 14px 0; box-sizing: border-box; }
 .ls-section.is-collapsed + .ls-section.is-collapsed { border-top: 0; }
 .ls-section:not(.is-collapsed):has(+ .ls-section.is-collapsed) { margin-bottom: 20px; }
+
+/* A4 one-page study view */
+.a4-view-screen.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: #303030;
+}
+
+.a4-skimming-controls[hidden] { display: none; }
+.a4-skimming-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.a4-skimming-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 12px;
+  background: rgba(32, 32, 32, .9);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .24);
+  color: #f5f2ec;
+  font-size: 11px;
+  font-weight: 650;
+  backdrop-filter: blur(10px);
+}
+.a4-skimming-timer time { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.a4-view-screen.is-fullscreen .a4-skimming-controls {
+  position: absolute;
+  z-index: 5;
+  top: 16px;
+  left: 16px;
+}
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content { padding-top: 52px; }
+.a4-view-screen.is-fullscreen.settings-collapsed .a4-skimming-controls { left: 72px; }
+.a4-end-skimming-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #75241f;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #a53d35, #742721);
+  box-shadow: 0 3px 0 #5e1e1a, 0 8px 18px rgba(80, 20, 18, .28);
+  color: #fff8f4;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.a4-end-skimming-button:hover:not(:disabled) {
+  border-color: #68201b;
+  background: linear-gradient(135deg, #b34a41, #87302a);
+  box-shadow: 0 5px 0 #5e1e1a, 0 11px 22px rgba(80, 20, 18, .34);
+}
+.a4-end-skimming-button:focus-visible { outline: 2px solid #f5c2a8; outline-offset: 2px; }
+.a4-end-skimming-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #5e1e1a, 0 4px 10px rgba(80, 20, 18, .24); }
+.a4-skimming-save-error {
+  position: fixed;
+  z-index: 2101;
+  top: 80px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid #d5a99a;
+  border-radius: 10px;
+  background: #fff8f4;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .18);
+  color: #78341f;
+  font-size: 12px;
+}
+.a4-skimming-save-error button {
+  flex: none;
+  padding: 5px 9px;
+  border: 1px solid #b5573a;
+  border-radius: 7px;
+  background: #a94e30;
+  color: #fffaf4;
+  cursor: pointer;
+}
+.a4-skimming-save-error button:disabled { cursor: wait; opacity: .65; }
+.a4-view-screen.is-fullscreen .a4-skimming-save-error { top: 68px; right: auto; left: 16px; }
+
+.a4-view-screen.is-fullscreen.settings-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) {
+  grid-template-columns: minmax(min(260px, 40vw), min(340px, 40vw)) minmax(0, 1fr);
+}
+
+.app-shell.a4-view-page.a4-fullscreen-page .site-head {
+  display: none;
+}
+
+.app-shell.a4-fullscreen-page ~ .support-widget {
+  display: none;
+}
+
+.a4-view-screen.is-fullscreen .a4-settings,
+.a4-view-screen.is-fullscreen .a4-resize-handle {
+  display: none;
+}
+
+.a4-view-screen.is-fullscreen.settings-collapsed .a4-settings-reopen {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 16px;
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  padding: 8px;
+  border-color: rgba(255, 255, 255, .28);
+  background: rgba(45, 45, 45, .72);
+  color: #fff;
+}
+
+.a4-view-screen.is-fullscreen.settings-collapsed .a4-settings-reopen:hover {
+  border-color: rgba(255, 255, 255, .6);
+  background: rgba(45, 45, 45, .92);
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-reopen {
+  display: none;
+}
+
+.a4-view-screen.is-fullscreen .a4-view-panel {
+  position: relative;
+  grid-column: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #303030;
+  box-shadow: none;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings {
+  position: relative;
+  grid-column: 1;
+  inset: auto;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  max-height: 100dvh;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings {
+  border-color: rgba(255, 255, 255, .14);
+  background: #282828;
+  color: #f5f2ec;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-collapse {
+  border-color: rgba(255, 255, 255, .18);
+  background: transparent;
+  color: #f5f2ec;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-collapse:hover {
+  border-color: rgba(255, 255, 255, .4);
+  background: #3a3a3a;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content {
+  max-height: none;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-group h2,
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-sort-check {
+  color: #d3cec5;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-settings-group {
+  border-color: rgba(255, 255, 255, .14);
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .study-font-setting,
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .study-font-setting output,
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-priority-status {
+  color: #d3cec5;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-priority-status:not([hidden]) {
+  background: #363636;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .study-font-setting input[type="range"] {
+  accent-color: #d7b99b;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .search {
+  border-color: rgba(255, 255, 255, .2);
+  background: #363636;
+  color: #f5f2ec;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .search::placeholder {
+  color: #b8b2a8;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-settings-control {
+  border-color: rgba(255, 255, 255, .18);
+  background: #3a3a3a;
+  color: #f5f2ec;
+  box-shadow: none;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-settings-control:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .4);
+  background: #505050;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content button.a4-settings-control[aria-pressed="true"] {
+  border-color: #d7b99b;
+  background: #5a4536;
+  color: #fff;
+}
+
+.a4-view-screen.is-fullscreen #a4FullscreenBtn {
+  display: none;
+}
+
+.a4-fullscreen-toolbar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.a4-fullscreen-toolbar[hidden] {
+  display: none;
+}
+
+.a4-page-nav {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #e2d6c5;
+  border-radius: 9px;
+  background: #fffefa;
+  color: #504333;
+  font: inherit;
+  cursor: pointer;
+}
+
+.a4-page-nav:hover:not(:disabled) {
+  border-color: #c8a98b;
+  background: #f4e7df;
+}
+
+.a4-page-nav:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.a4-page-indicator {
+  min-width: 90px;
+  color: var(--soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.a4-view-screen.is-fullscreen .a4-page-indicator {
+  color: #f5f2ec;
+}
+
+.a4-view-screen.is-fullscreen .preview-box {
+  justify-content: flex-start;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  scrollbar-color: #777 #303030;
+  scrollbar-width: thin;
+}
+
+.a4-view-screen.is-fullscreen .preview-box .frame {
+  margin: auto;
+}
+
+.a4-view-screen.is-fullscreen .a4-view-panel {
+  background: #303030;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-view-panel {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+}
+
+.a4-view-screen.is-fullscreen .frame[hidden] {
+  display: none;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-fullscreen-toolbar {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-zoom-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(42px, auto) minmax(0, 1fr);
+  grid-template-areas: "zoom-out fit value zoom-in";
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) [data-a4-zoom-out] { grid-area: zoom-out; }
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) [data-a4-zoom-fit] { grid-area: fit; }
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) [data-a4-zoom-value] { grid-area: value; }
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) [data-a4-zoom-in] { grid-area: zoom-in; }
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-zoom-controls .a4-page-nav {
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-zoom-value {
+  min-width: 42px;
+}
+
+.a4-view-screen.is-fullscreen .a4-page-nav {
+  border-color: rgba(255, 255, 255, .2);
+  background: #3a3a3a;
+  color: #f5f2ec;
+}
+
+.a4-view-screen.is-fullscreen .a4-page-nav:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .45);
+  background: #505050;
+}
+
+.a4-view-screen.is-fullscreen .a4-page-nav[aria-pressed="true"] {
+  border-color: #d7b99b;
+  background: #5a4536;
+}
+
+.a4-page-side-nav[hidden] {
+  display: none;
+}
+
+.a4-page-side-nav {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+}
+
+.a4-page-side-button {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  place-items: center;
+  border-color: rgba(255, 255, 255, .24);
+  border-radius: 50%;
+  background: rgba(36, 36, 36, .86);
+  color: #f5f2ec;
+  font-size: 24px;
+  line-height: 1;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.a4-page-side-button[data-a4-page-prev] {
+  left: var(--a4-page-nav-left, 8px);
+}
+
+.a4-page-side-button[data-a4-page-next] {
+  right: var(--a4-page-nav-right, 8px);
+}
+
+.a4-page-side-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .55);
+  background: rgba(80, 80, 80, .96);
+}
+
+.a4-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, .16);
+}
+
+.a4-zoom-value {
+  min-width: 42px;
+  color: #f5f2ec;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.a4-view-screen.is-fullscreen .a4-zoom-fit {
+  min-width: 42px;
+}
+
+@media (max-width: 480px) {
+  .a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+  .a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-fullscreen-toolbar { gap: 6px; }
+  .a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-zoom-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "zoom-out fit" "value zoom-in";
+  }
+  .a4-page-nav { padding: 5px 6px; font-size: 11px; }
+  .a4-page-indicator { min-width: 58px; font-size: 11px; }
+}
 .learning-status-top:has(+ .ls-section) { margin-bottom: 0; }
+
+.a4-view-screen .a4-settings-content .a4-fullscreen-study-button {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  align-self: center;
+  margin-top: 8px;
+  padding: 10px 20px;
+  border: 1px solid #8f3f26;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #a94e30, #78341f);
+  box-shadow: 0 3px 0 #682b1b, 0 10px 24px rgba(120, 52, 31, .22);
+  color: #fffaf4;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+
+.a4-view-screen .a4-settings-content .a4-fullscreen-study-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #8f3f26;
+  background: linear-gradient(135deg, #b95b39, #873c24);
+  box-shadow: 0 5px 0 #682b1b, 0 13px 28px rgba(120, 52, 31, .26);
+}
+
+.a4-view-screen .a4-settings-content .a4-fullscreen-study-button:focus-visible {
+  outline: 3px solid rgba(169, 78, 48, .3);
+  outline-offset: 3px;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-fullscreen-study-button {
+  border-color: #8f3f26;
+  background: linear-gradient(135deg, #a94e30, #78341f);
+  box-shadow: 0 3px 0 #682b1b, 0 10px 24px rgba(120, 52, 31, .22);
+  color: #fffaf4;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-fullscreen-study-button:hover:not(:disabled) {
+  border-color: #8f3f26;
+  background: linear-gradient(135deg, #b95b39, #873c24);
+  box-shadow: 0 5px 0 #682b1b, 0 13px 28px rgba(120, 52, 31, .26);
+}

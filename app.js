@@ -1,4 +1,4 @@
-import { appendStudySession, emptyStudyRecords, removeStudySession } from './lib/studyRecords.js?v=3';
+import { appendStudySession, emptyStudyRecords, removeStudySession, summarizeStudySessions } from './lib/studyRecords.js?v=5';
 import {
   parseStudyFile,
   normalizeStudyWorkbook,
@@ -64,7 +64,7 @@ import {
   saveStudySettings as saveStudySettingsToStore,
   readStudyRecordFile,
   writeStudyRecordFile,
-} from './lib/projectStore.js?v=6';
+} from './lib/projectStore.js?v=7';
 import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=7';
 import {
   DEFAULT_DAILY_NEW_CARDS,
@@ -343,6 +343,7 @@ const state = {
   studyError: '',
   studySaving: false,
   studyRecords: null,
+  a4SkimmingSaveError: '',
   logPreviewLoading: false,
   logPreviewError: '',
   logPreviewView: 'monthly',
@@ -369,6 +370,9 @@ window.addEventListener('beforeunload', (event) => {
     processingProjectIds.size > 0 ||
     state.studySaving ||
     Boolean(state.pendingReview) ||
+    Boolean(a4SkimmingSession) ||
+    a4SkimmingPendingSessions.length > 0 ||
+    Boolean(a4SkimmingSavePromise) ||
     (state.page === 'edit' && state.editDirty);
   if (!hasPendingWork) return;
   event.preventDefault();
@@ -626,6 +630,14 @@ document.addEventListener('keydown', (event) => {
 
 let studyPanelWidth = 290;
 let settingsCollapsed = false;
+let a4Fullscreen = false;
+let a4FullscreenPageIndex = 0;
+let a4FullscreenZoom = 1;
+let a4PreFullscreenScrollTop = 0;
+let a4SkimmingSession = null;
+let a4SkimmingTimerInterval = null;
+let a4SkimmingPendingSessions = [];
+let a4SkimmingSavePromise = null;
 let shuffleEffectTimer;
 
 function playShuffleEffect(button) {
@@ -2844,8 +2856,8 @@ function headerHTML() {
       </button>
       ${['workspace', 'home'].includes(state.page) ? '' : `<nav class="global-nav" aria-label="${L('주요 페이지','Main pages')}">
         <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습하기','Study')}</button>
-        <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습 상태','Learning status')}</button>
         <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>A4 view</button>
+        <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습 상태','Learning status')}</button>
       </nav>`}
       <div class="site-head-right">
         <a class="how-to-use-link" href="${TUTORIAL_PAGE_URL}" target="_blank" rel="noopener noreferrer">${L('튜토리얼', 'Tutorial')}</a>
@@ -3534,6 +3546,12 @@ function studySettingsHTML() {
     </div>`;
 }
 
+function fullscreenExitIconHTML() {
+  return `<svg class="fullscreen-exit-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+    <path d="M9 2v6H3M15 2v6h6M3 16h6v6M21 16h-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
 function studyHTML() {
   const session = state.study;
   const queue = buildStudyQueue();
@@ -3627,7 +3645,7 @@ function studyHTML() {
               ? `${Math.min(session.index + 1, session.cards.length)} / ${session.cards.length} · ${L(`이번 회차 ${seenCount}개`,`${seenCount} this round`)}`
               : L(`${session.cards.length}개 항목 준비됨`,`${session.cards.length} items ready`)}</span>` : ''}
           </div>
-          ${session?.started ? `<button type="button" class="study-fullscreen-button" data-study-action="fullscreen">${state.studyFullscreen ? L('전체화면 종료','Exit full screen') : L('⛶ 전체화면','⛶ Full screen')}</button>` : ''}
+          ${session?.started ? `<button type="button" class="study-fullscreen-button${state.studyFullscreen ? ' study-fullscreen-exit' : ''}" data-study-action="fullscreen" aria-label="${state.studyFullscreen ? L('전체화면 종료','Exit full screen') : L('전체화면','Full screen')}" title="${state.studyFullscreen ? L('전체화면 종료','Exit full screen') : L('전체화면','Full screen')}">${state.studyFullscreen ? fullscreenExitIconHTML() : L('⛶ 전체화면','⛶ Full screen')}</button>` : ''}
         </div>
         <p class="study-error" role="alert"${state.studyError ? '' : ' hidden'}>${esc(state.studyError)}</p>
         <section class="study-stage" aria-label="${L('학습하기 페이지','Study page')}">
@@ -3657,8 +3675,7 @@ function studySessionSeconds(session) {
 }
 
 function studyLogStatsHTML(sessions, periodLabel) {
-  const items = sessions.reduce((sum, session) => sum + session.itemCount, 0);
-  const seconds = sessions.reduce((sum, session) => sum + studySessionSeconds(session), 0);
+  const { itemCount: items, durationSeconds: seconds } = summarizeStudySessions(sessions);
   return `<div class="study-log-stats">
     <div><span>${L(`${periodLabel} 학습 카드 수`, `${periodLabel} cards studied`)}</span><strong>${items}${L('개', '')}</strong></div>
     <div><span>${L(`${periodLabel} 학습 시간`, `${periodLabel} study time`)}</span><strong>${formatStudyTime(seconds * 1000)}</strong></div>
@@ -3684,13 +3701,17 @@ function studyLogPeriodNavHTML() {
 
 function studyLogDailySessionsHTML(sessions) {
   if (!sessions.length) return `<p class="study-log-empty">${L('이 날짜의 학습 기록이 없어요.', 'No study sessions for this day.')}</p>`;
-  return `<div class="study-log-session-list">${sessions.map(({ session, index }, round) => `
-    <article class="study-log-session">
-      <strong>${L(`${round + 1}회차`, `Round ${round + 1}`)}</strong>
-      <span>${L('학습 카드', 'Cards studied')} <b>${session.itemCount}${L('개', '')}</b></span>
-      <span>${L('학습 시간', 'Study time')} <b>${formatStudyTime(studySessionSeconds(session) * 1000)}</b></span>
-      <button type="button" class="study-log-delete" data-log-delete="${index}" aria-label="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}" title="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}"${state.logSessionDeleting ? ' disabled' : ''}>×</button>
-    </article>`).join('')}</div>`;
+  return `<div class="study-log-session-list">${sessions.map(({ session, index }) => {
+    const isSkimming = session.mode === 'skimming';
+    const modeLabel = isSkimming ? L('스키밍', 'Skimming') : L('플래시카드', 'Flashcards');
+    return `
+      <article class="study-log-session${isSkimming ? ' is-skimming' : ''}">
+        <strong><span class="study-log-session-mode${isSkimming ? ' is-skimming' : ''}">${modeLabel}</span></strong>
+        ${isSkimming ? '' : `<span>${L('학습 카드', 'Cards studied')} <b>${session.itemCount}${L('개', '')}</b></span>`}
+        <span>${L('학습 시간', 'Study time')} <b>${formatStudyTime(studySessionSeconds(session) * 1000)}</b></span>
+        <button type="button" class="study-log-delete" data-log-delete="${index}" aria-label="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}" title="${state.logSessionDeleting ? L('삭제 중', 'Deleting session') : L('회차 삭제', 'Delete session')}"${state.logSessionDeleting ? ' disabled' : ''}>×</button>
+      </article>`;
+  }).join('')}</div>`;
 }
 
 function studyLogCalendarHTML(sessions, selectedDate) {
@@ -3717,8 +3738,13 @@ function studyLogCalendarHTML(sessions, selectedDate) {
     const entry = dailyCounts.get(date);
     const items = entry?.items || 0;
     const dateLabel = L(`${month}월 ${day}일`, `${date}`);
-    const activityLabel = items ? L(`, ${items}개 학습`, `, ${items} cards studied`) : '';
-    cells.push(`<button type="button" class="study-log-calendar-cell level-${level(entry)}${date === selectedDate ? ' is-selected' : ''}${date === localDateForExport() ? ' is-today' : ''}" data-log-date="${date}" aria-label="${dateLabel}${activityLabel}" aria-pressed="${date === selectedDate}"${entry ? ` title="${dateLabel} · ${items}${L('개 학습', ' cards studied')}"` : ` title="${dateLabel}"`}>${day}</button>`);
+    const activityLabel = entry
+      ? L(`, ${entry.rounds}회차${items ? ` · ${items}개 학습` : ''}`, `, ${entry.rounds} rounds${items ? ` · ${items} cards studied` : ''}`)
+      : '';
+    const activityTitle = entry
+      ? L(`${entry.rounds}회차${items ? ` · ${items}개 학습` : ''}`, `${entry.rounds} rounds${items ? ` · ${items} cards studied` : ''}`)
+      : '';
+    cells.push(`<button type="button" class="study-log-calendar-cell level-${level(entry)}${date === selectedDate ? ' is-selected' : ''}${date === localDateForExport() ? ' is-today' : ''}" data-log-date="${date}" aria-label="${dateLabel}${activityLabel}" aria-pressed="${date === selectedDate}" title="${dateLabel}${entry ? ` · ${activityTitle}` : ''}">${day}</button>`);
   }
   return `<section class="study-log-calendar" aria-label="${L('월간 학습 달력', 'Monthly study calendar')}">
     <div class="study-log-calendar-weekdays">${L(['일', '월', '화', '수', '목', '금', '토'], ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day) => `<span>${day}</span>`).join('')}</div>
@@ -3764,7 +3790,9 @@ function studyLogYearGrassHTML(sessions) {
       const key = `${state.logYear}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       const entry = dailyCounts.get(key);
       const items = entry?.items || 0;
-      const dateLabel = `${key} · ${items}${L('개 학습', ' cards studied')}`;
+      const dateLabel = entry
+        ? `${key} · ${entry.rounds}${L('회차', ' rounds')}${items ? ` · ${items}${L('개 학습', ' cards studied')}` : ''}`
+        : `${key} · ${L('학습 기록 없음', 'No study sessions')}`;
       days.push(`<span class="study-log-grass-cell level-${level(entry)}" title="${dateLabel}" aria-label="${dateLabel}"></span>`);
     }
     weeks.push(`<div class="study-log-grass-week"><span class="study-log-grass-month">${monthLabel}</span>${days.join('')}</div>`);
@@ -4241,12 +4269,23 @@ function a4ViewHTML() {
   const a4HasImage = state.pairs.some((pair) => /\[img:/.test(`${pair.key}\n${pair.value}\n${pair.hint ?? ''}`));
   return `
     ${headerHTML()}
-    <main class="shell a4-view-screen${settingsCollapsed ? ' settings-collapsed' : ''}" style="--study-panel-width:${studyPanelWidth}px">
+    <main class="shell a4-view-screen${settingsCollapsed ? ' settings-collapsed' : ''}${a4Fullscreen ? ' is-fullscreen' : ''}" style="--study-panel-width:${studyPanelWidth}px" tabindex="-1">
       <button type="button" id="reopenSettingsBtn" class="a4-settings-reopen" aria-label="${L('설정 펼치기','Expand settings')}" title="${L('설정 펼치기','Expand settings')}"${settingsCollapsed ? '' : ' hidden'}>
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.49.49 0 0 0-.61.22L2.63 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.05.3-.08.62-.08.94s.03.64.08.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.21.37.3.61.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54c.04.24.24.42.49.42h3.84c.25 0 .45-.18.49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96c.23.09.49-.01.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.01-1.56ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/>
         </svg>
       </button>
+      <div class="a4-skimming-controls" data-a4-skimming-controls hidden>
+        <div class="a4-skimming-timer" data-a4-skimming-timer role="timer" aria-live="off" aria-label="${L('스키밍 학습 시간','Skimming study time')}">
+          <span>${L('스키밍','Skimming')}</span>
+          <time data-a4-skimming-time>00:00:00</time>
+        </div>
+        <button type="button" class="a4-end-skimming-button" data-a4-skimming-end data-study-hint="${L('스키밍을 종료하고 지금까지의 시간을 기록합니다.','End skimming and save the time studied so far.')}">${L('스키밍 종료','End Skimming')}</button>
+      </div>
+      ${state.a4SkimmingSaveError ? `<div class="a4-skimming-save-error" role="alert">
+        <span>${esc(state.a4SkimmingSaveError)}</span>
+        <button type="button" data-a4-skimming-retry>${L('다시 시도', 'Retry')}</button>
+      </div>` : ''}
       <section class="panel a4-settings" aria-label="${L('설정','Settings')}">
         <button type="button" id="collapseSettingsBtn" class="a4-settings-collapse" aria-label="${L('설정 접기','Collapse settings')}" title="${L('설정 접기','Collapse settings')}">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -4280,13 +4319,29 @@ function a4ViewHTML() {
               ${L('순서 섞기', 'Shuffle')}
             </button>
           </section>
+          <section class="a4-settings-group a4-start-study-group" aria-label="${L('스키밍','Skimming')}">
+            <button type="button" id="a4FullscreenBtn" class="btn a4-settings-control a4-fullscreen-study-button" data-study-hint="${L('A4 페이지를 한 장씩 보며 학습합니다.','Study with one A4 page at a time.')}">${L('스키밍하기','Go Skimming')}</button>
+          </section>
           <div class="a4-output-actions">
             <button type="button" id="a4PrintBtn" class="btn a4-settings-control a4-print-button" data-study-hint="${L('PDF 인쇄','Print to PDF')}">${L('PDF로 내보내기','Export to PDF')}</button>
           </div>
         </div>
+        <div class="a4-fullscreen-toolbar" hidden>
+          <span class="a4-page-indicator" data-a4-page-indicator aria-live="polite"></span>
+          <span class="a4-zoom-controls" role="group" aria-label="${L('확대/축소','Zoom controls')}">
+            <button type="button" class="a4-page-nav" data-a4-zoom-out aria-label="${L('축소','Zoom out')}" title="${L('축소','Zoom out')}">−</button>
+            <button type="button" class="a4-page-nav a4-zoom-fit" data-a4-zoom-fit>${L('맞춤','Fit')}</button>
+            <span class="a4-zoom-value" data-a4-zoom-value aria-live="polite">100%</span>
+            <button type="button" class="a4-page-nav" data-a4-zoom-in aria-label="${L('확대','Zoom in')}" title="${L('확대','Zoom in')}">+</button>
+          </span>
+        </div>
       </section>
       <div id="a4PanelResize" class="resize-handle a4-resize-handle" role="separator" aria-label="${L('설정 영역 너비 조절','Resize settings panel')}" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="900" aria-valuenow="${studyPanelWidth}" title="${L('드래그하거나 방향키로 너비 조절','Drag or use arrow keys to resize')}" tabindex="0"></div>
       <section class="panel a4-view-panel" aria-label="${L('A4 미리보기','A4 preview')}">
+        <div class="a4-page-side-nav" hidden aria-label="${L('페이지 이동','Page navigation')}">
+          <button type="button" class="a4-page-nav a4-page-side-button" data-a4-page-prev aria-label="${L('이전 페이지','Previous page')}" title="${L('이전 페이지','Previous page')}" aria-controls="a4PreviewBox">‹</button>
+          <button type="button" class="a4-page-nav a4-page-side-button" data-a4-page-next aria-label="${L('다음 페이지','Next page')}" title="${L('다음 페이지','Next page')}" aria-controls="a4PreviewBox">›</button>
+        </div>
         <div id="a4PreviewBox" class="preview-box"></div>
       </section>
     </main>`;
@@ -4352,7 +4407,7 @@ function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLab
                     <span class="col-key">
                       ${
                         hasHint
-                          ? `<button type="button" class="study-key-trigger" data-study-action="hint" data-id="${esc(row.id)}" aria-expanded="${hintVisible}" aria-label="${esc(L(`${stripImageTags(row.key)} hint ${hintVisible ? '숨기기' : '보기'}`, `${hintVisible ? 'Hide' : 'Show'} hint for ${stripImageTags(row.key)}`))}"><span class="sheet-main-key">${richText(row.key)}</span></button>`
+                          ? `<button type="button" class="study-key-trigger" data-study-action="hint" data-hint-key="${esc(stripImageTags(row.key))}" data-id="${esc(row.id)}" aria-expanded="${hintVisible}" aria-label="${esc(L(`${stripImageTags(row.key)} hint ${hintVisible ? '숨기기' : '보기'}`, `${hintVisible ? 'Hide' : 'Show'} hint for ${stripImageTags(row.key)}`))}"><span class="sheet-main-key">${richText(row.key)}</span></button>`
                           : `<span class="sheet-main-key">${richText(row.key)}</span>`
                       }
                     </span>
@@ -4361,7 +4416,7 @@ function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLab
                     </span>
                     ${
                       row.hint
-                        ? `<div class="study-hint-content">${richText(row.hint)}</div>`
+                        ? `<button type="button" class="study-hint-content" data-study-action="hint" data-id="${esc(row.id)}" aria-expanded="true" aria-label="${esc(L(`${stripImageTags(row.key)} hint 숨기기`, `Hide hint for ${stripImageTags(row.key)}`))}">${richText(row.hint)}</button>`
                         : ''
                     }
                   </div>`;
@@ -4501,6 +4556,71 @@ function refreshLearningStatusRetrievability() {
 /* ---------------- 렌더 ---------------- */
 let currentScale = 0;
 
+function a4ScaleForBox(box) {
+  const width = box.clientWidth || SHEET_W_PX;
+  const widthScale = width / SHEET_W_PX;
+  if (!a4Fullscreen) return Math.min(1, Math.max(0.2, widthScale));
+  const height = box.clientHeight || SHEET_H_PX;
+  return Math.min(widthScale, height / SHEET_H_PX) * a4FullscreenZoom;
+}
+
+function syncA4PageSideNavigation(box) {
+  const navigation = document.querySelector('.a4-page-side-nav');
+  if (!navigation) return;
+  const frame = box.querySelector(`.frame[data-page-index="${a4FullscreenPageIndex}"]`);
+  const panel = box.closest('.a4-view-panel');
+  if (!a4Fullscreen || !frame || !panel) {
+    navigation.hidden = true;
+    return;
+  }
+
+  navigation.hidden = false;
+  const frameRect = frame.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  const sideButtonWidth = 36;
+  const pageFits = frameRect.width + sideButtonWidth * 2 + 32 <= panelRect.width;
+  const left = pageFits
+    ? Math.max(8, frameRect.left - panelRect.left - sideButtonWidth - 8)
+    : 8;
+  const right = pageFits
+    ? Math.max(8, panelRect.right - frameRect.right - sideButtonWidth - 8)
+    : 8;
+  navigation.style.setProperty('--a4-page-nav-left', `${left}px`);
+  navigation.style.setProperty('--a4-page-nav-right', `${right}px`);
+}
+
+function syncA4FullscreenControls(box, totalPages) {
+  const toolbar = document.querySelector('.a4-fullscreen-toolbar');
+  const fullscreenButton = document.getElementById('a4FullscreenBtn');
+  const previousPageButton = document.querySelector('[data-a4-page-prev]');
+  const nextPageButton = document.querySelector('[data-a4-page-next]');
+  const sideNavigation = document.querySelector('.a4-page-side-nav');
+  if (fullscreenButton) fullscreenButton.disabled = !totalPages;
+  if (toolbar) toolbar.hidden = !a4Fullscreen;
+  if (sideNavigation) sideNavigation.hidden = !a4Fullscreen || !totalPages;
+
+  a4FullscreenPageIndex = Math.min(Math.max(0, a4FullscreenPageIndex), Math.max(0, totalPages - 1));
+  const pageIndicator = toolbar?.querySelector('[data-a4-page-indicator]');
+  if (pageIndicator) pageIndicator.textContent = totalPages
+    ? L(`${a4FullscreenPageIndex + 1} / ${totalPages}페이지`, `Page ${a4FullscreenPageIndex + 1} of ${totalPages}`)
+    : L('페이지 없음', 'No pages');
+  if (previousPageButton) previousPageButton.disabled = a4FullscreenPageIndex === 0;
+  if (nextPageButton) nextPageButton.disabled = a4FullscreenPageIndex >= totalPages - 1;
+  if (toolbar) {
+    toolbar.querySelector('[data-a4-zoom-value]').textContent = `${Math.round(a4FullscreenZoom * 100)}%`;
+    toolbar.querySelector('[data-a4-zoom-out]').disabled = a4FullscreenZoom <= 0.6;
+    toolbar.querySelector('[data-a4-zoom-in]').disabled = a4FullscreenZoom >= 3;
+    toolbar.querySelector('[data-a4-zoom-fit]').setAttribute('aria-pressed', String(a4FullscreenZoom === 1));
+  }
+  box.querySelectorAll('.frame').forEach((frame, index) => {
+    frame.hidden = index !== a4FullscreenPageIndex;
+  });
+  box.querySelectorAll('.a4-section-divider').forEach((divider) => {
+    divider.hidden = true;
+  });
+  syncA4PageSideNavigation(box);
+}
+
 function renderA4View() {
   const box = document.getElementById('a4PreviewBox');
   if (!box) return;
@@ -4541,27 +4661,210 @@ function renderA4View() {
   if (allHintsButton) {
     syncA4HintControls(allHintsButton);
   }
+  syncA4FullscreenControls(box, totalPages);
   if (!totalPages) {
     box.innerHTML = `<div class="empty-box">${state.a4Query.trim() ? L('검색 결과가 없어요.', 'No results found.') : L('학습할 항목이 없어요. 홈에서 프로젝트를 확인해 주세요.', 'There are no items to study. Check your project on the home page.')}</div>`;
+    syncA4FullscreenControls(box, totalPages);
+    syncA4SkimmingTimer();
     return;
   }
 
-  const width = box.clientWidth || SHEET_W_PX;
-  const scale = Math.min(1, Math.max(0.2, width / SHEET_W_PX));
+  const scale = a4ScaleForBox(box);
   currentScale = scale;
   const scrollTop = box.scrollTop;
+  const scrollLeft = box.scrollLeft;
   box.innerHTML = list
     .map(({ rows, section, sectionStart }, i) => {
       const isLastPage = i === list.length - 1;
       const sectionLabel = a4SectionLabel(section, sectionStart);
-      return `${sectionLabel ? `<div class="a4-section-divider" style="width:${SHEET_W_PX * scale}px"><span>${esc(sectionLabel)}</span></div>` : ''}<div class="frame" style="width:${SHEET_W_PX * scale}px;height:${SHEET_H_PX * scale}px">
+      return `${sectionLabel ? `<div class="a4-section-divider" style="width:${SHEET_W_PX * scale}px"><span>${esc(sectionLabel)}</span></div>` : ''}<div class="frame" data-page-index="${i}" style="width:${SHEET_W_PX * scale}px;height:${SHEET_H_PX * scale}px">
         <div class="sheet-scaler" style="transform:scale(${scale});transform-origin:top left">
           ${a4SheetHTML(rows, i + 1, totalPages, isLastPage)}
         </div>
       </div>`;
     })
     .join('');
+  syncA4FullscreenControls(box, totalPages);
   box.scrollTop = scrollTop;
+  box.scrollLeft = scrollLeft;
+  syncA4PageSideNavigation(box);
+  syncA4SkimmingTimer();
+}
+
+function syncA4SkimmingTimer() {
+  const controls = document.querySelector('[data-a4-skimming-controls]');
+  const timer = document.querySelector('[data-a4-skimming-timer]');
+  const time = timer?.querySelector('[data-a4-skimming-time]');
+  const isActive = Boolean(a4Fullscreen && a4SkimmingSession);
+  if (!controls || !timer || !time) return;
+  controls.hidden = !isActive;
+  if (!isActive) return;
+  const elapsed = formatStudyTime(Date.now() - a4SkimmingSession.startedAt);
+  time.textContent = elapsed;
+  timer.setAttribute('aria-label', L(`스키밍 학습 시간 ${elapsed}`, `Skimming study time ${elapsed}`));
+}
+
+function startA4SkimmingSession() {
+  if (!state.project) return;
+  if (a4SkimmingTimerInterval) window.clearInterval(a4SkimmingTimerInterval);
+  a4SkimmingSession = { projectName: state.project.name, startedAt: Date.now() };
+  syncA4SkimmingTimer();
+  a4SkimmingTimerInterval = window.setInterval(syncA4SkimmingTimer, 1000);
+}
+
+function persistPendingA4SkimmingSessions() {
+  if (a4SkimmingSavePromise) {
+    return a4SkimmingSavePromise.then((saved) => {
+      if (!saved) return false;
+      return a4SkimmingPendingSessions.length ? persistPendingA4SkimmingSessions() : true;
+    });
+  }
+  const operation = (async () => {
+    while (a4SkimmingPendingSessions.length) {
+      const pending = a4SkimmingPendingSessions[0];
+      const records = await readStudyRecordFile(pending.projectName);
+      const nextRecords = appendStudySession(records || emptyStudyRecords(), pending.record);
+      await writeStudyRecordFile(pending.projectName, nextRecords);
+      a4SkimmingPendingSessions.shift();
+      if (state.project?.name === pending.projectName) {
+        state.studyRecords = null;
+        state.logDeleteError = '';
+      }
+    }
+  })();
+  const promise = operation.then(
+    () => {
+      const hadError = Boolean(state.a4SkimmingSaveError);
+      state.a4SkimmingSaveError = '';
+      if (hadError && state.page === 'a4') render();
+      return true;
+    },
+    (error) => {
+      console.error('Could not save A4 skimming sessions.', error);
+      state.a4SkimmingSaveError = L(
+        `스키밍 학습 기록을 저장하지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not save skimming study records: ${error instanceof Error ? error.message : String(error)}`
+      );
+      if (state.page === 'a4') render();
+      return false;
+    }
+  ).finally(() => {
+    if (a4SkimmingSavePromise === promise) a4SkimmingSavePromise = null;
+  });
+  a4SkimmingSavePromise = promise;
+  return promise;
+}
+
+function stopA4SkimmingSession() {
+  if (!a4SkimmingSession) {
+    syncA4SkimmingTimer();
+    return;
+  }
+  const session = a4SkimmingSession;
+  a4SkimmingSession = null;
+  if (a4SkimmingTimerInterval) {
+    window.clearInterval(a4SkimmingTimerInterval);
+    a4SkimmingTimerInterval = null;
+  }
+  a4SkimmingPendingSessions.push({
+    projectName: session.projectName,
+    record: {
+      date: localDateForExport(),
+      itemCount: 0,
+      durationSeconds: Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000)),
+      mode: 'skimming',
+    },
+  });
+  syncA4SkimmingTimer();
+  void persistPendingA4SkimmingSessions();
+}
+
+function confirmA4SkimmingEnd() {
+  return !a4SkimmingSession || window.confirm(L(
+    '스키밍을 종료하고 지금까지의 학습 시간을 기록할까요? 취소하면 계속 학습합니다.',
+    'End skimming and save the time studied so far? Cancel to keep studying.'
+  ));
+}
+
+async function toggleA4Fullscreen(force, { confirmEnd = true } = {}) {
+  const next = typeof force === 'boolean' ? force : !a4Fullscreen;
+  if (next === a4Fullscreen) return;
+  if (!next && confirmEnd && !confirmA4SkimmingEnd()) return;
+  const layout = document.querySelector('.a4-view-screen');
+  const box = document.getElementById('a4PreviewBox');
+  if (next) {
+    a4PreFullscreenScrollTop = box?.scrollTop ?? 0;
+    a4FullscreenPageIndex = 0;
+    a4FullscreenZoom = 1;
+    settingsCollapsed = false;
+  }
+  a4Fullscreen = next;
+  if (next) startA4SkimmingSession();
+  else stopA4SkimmingSession();
+  layout?.classList.toggle('is-fullscreen', next);
+  layout?.classList.toggle('settings-collapsed', settingsCollapsed);
+  const reopenButton = document.getElementById('reopenSettingsBtn');
+  if (reopenButton) reopenButton.hidden = !settingsCollapsed;
+  appEl.classList.toggle('a4-fullscreen-page', next);
+  if (next && box) box.scrollTop = 0;
+
+  try {
+    if (next && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else if (!next && document.fullscreenElement) await document.exitFullscreen();
+  } catch (error) {
+    console.warn('Could not use browser fullscreen; keeping the in-page fullscreen view.', error);
+  }
+
+  requestAnimationFrame(() => {
+    renderA4View();
+    if (next) layout?.focus();
+    else {
+      const currentBox = document.getElementById('a4PreviewBox');
+      if (currentBox) currentBox.scrollTop = a4PreFullscreenScrollTop;
+      document.getElementById(settingsCollapsed ? 'reopenSettingsBtn' : 'a4FullscreenBtn')?.focus();
+    }
+  });
+}
+
+function changeA4FullscreenPage(delta) {
+  const box = document.getElementById('a4PreviewBox');
+  if (!box) return;
+  const totalPages = a4Pages().length;
+  if (!totalPages) return;
+  a4FullscreenPageIndex = Math.min(Math.max(0, a4FullscreenPageIndex + delta), totalPages - 1);
+  box.scrollTop = 0;
+  syncA4FullscreenControls(box, totalPages);
+}
+
+function changeA4FullscreenZoom(nextZoom, anchor) {
+  const box = document.getElementById('a4PreviewBox');
+  const frame = box?.querySelector(`.frame[data-page-index="${a4FullscreenPageIndex}"]`);
+  const previousScale = currentScale;
+  const previousScrollLeft = box?.scrollLeft ?? 0;
+  const previousScrollTop = box?.scrollTop ?? 0;
+  const boxRect = box?.getBoundingClientRect();
+  const frameRect = frame?.getBoundingClientRect();
+  const pageOffsetX = anchor && boxRect && frameRect
+    ? anchor.x + previousScrollLeft - (frameRect.left - boxRect.left + previousScrollLeft)
+    : 0;
+  const pageOffsetY = anchor && boxRect && frameRect
+    ? anchor.y + previousScrollTop - (frameRect.top - boxRect.top + previousScrollTop)
+    : 0;
+  a4FullscreenZoom = Math.min(3, Math.max(0.6, nextZoom));
+  renderA4View();
+  if (anchor && box && previousScale > 0) {
+    const updatedFrame = box.querySelector(`.frame[data-page-index="${a4FullscreenPageIndex}"]`);
+    const updatedBoxRect = box.getBoundingClientRect();
+    const updatedFrameRect = updatedFrame?.getBoundingClientRect();
+    if (updatedFrameRect) {
+      const scaleRatio = currentScale / previousScale;
+      const frameOriginX = updatedFrameRect.left - updatedBoxRect.left + box.scrollLeft;
+      const frameOriginY = updatedFrameRect.top - updatedBoxRect.top + box.scrollTop;
+      box.scrollLeft = Math.max(0, frameOriginX + pageOffsetX * scaleRatio - anchor.x);
+      box.scrollTop = Math.max(0, frameOriginY + pageOffsetY * scaleRatio - anchor.y);
+    }
+    syncA4PageSideNavigation(box);
+  }
 }
 
 function syncStudyValueControls(box) {
@@ -4582,6 +4885,14 @@ function syncStudyValueControls(box) {
 }
 
 function render() {
+  if (state.page !== 'a4' && a4Fullscreen) {
+    a4Fullscreen = false;
+    stopA4SkimmingSession();
+    appEl.classList.remove('a4-fullscreen-page');
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch((error) => console.warn('Could not exit browser fullscreen.', error));
+    }
+  }
   if (!state.page === 'study' && studyTimerInterval) {
     window.clearInterval(studyTimerInterval);
     studyTimerInterval = null;
@@ -5749,6 +6060,26 @@ document.addEventListener('fullscreenchange', () => {
     state.studyFullscreen = false;
     render();
   }
+  if (!document.fullscreenElement && a4Fullscreen) {
+    if (!confirmA4SkimmingEnd()) {
+      document.documentElement.requestFullscreen().catch((error) => {
+        console.warn('Could not restore browser fullscreen after cancelling skimming exit.', error);
+      });
+      return;
+    }
+    a4Fullscreen = false;
+    stopA4SkimmingSession();
+    appEl.classList.remove('a4-fullscreen-page');
+    const layout = document.querySelector('.a4-view-screen');
+    layout?.classList.remove('is-fullscreen');
+    layout?.classList.toggle('settings-collapsed', settingsCollapsed);
+    const reopenButton = document.getElementById('reopenSettingsBtn');
+    if (reopenButton) reopenButton.hidden = !settingsCollapsed;
+    renderA4View();
+    const box = document.getElementById('a4PreviewBox');
+    if (box) box.scrollTop = a4PreFullscreenScrollTop;
+    document.getElementById(settingsCollapsed ? 'reopenSettingsBtn' : 'a4FullscreenBtn')?.focus();
+  }
 });
 
 function attachStudy() {
@@ -6325,9 +6656,52 @@ function attach() {
 
   const a4PreviewBox = document.getElementById('a4PreviewBox');
   if (a4PreviewBox) {
+    let pinchDelta = 0;
+    let pinchFrame = 0;
+    let pinchAnchor = null;
+    let gestureStartZoom = a4FullscreenZoom;
+    const zoomAnchorFromEvent = (event) => {
+      const rect = a4PreviewBox.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+        y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+      };
+    };
+    const queuePinchZoom = (deltaY, anchor) => {
+      pinchDelta += deltaY;
+      pinchAnchor = anchor;
+      if (pinchFrame) return;
+      pinchFrame = requestAnimationFrame(() => {
+        const accumulatedDelta = pinchDelta;
+        const currentAnchor = pinchAnchor;
+        pinchDelta = 0;
+        pinchFrame = 0;
+        pinchAnchor = null;
+        if (a4Fullscreen && accumulatedDelta) {
+          changeA4FullscreenZoom(a4FullscreenZoom * Math.exp(-accumulatedDelta * 0.002), currentAnchor);
+        }
+      });
+    };
+    a4PreviewBox.addEventListener('wheel', (event) => {
+      if (!a4Fullscreen || !event.ctrlKey) return;
+      event.preventDefault();
+      if (event.deltaY) queuePinchZoom(event.deltaY, zoomAnchorFromEvent(event));
+    }, { passive: false });
+    a4PreviewBox.addEventListener('gesturestart', (event) => {
+      if (!a4Fullscreen) return;
+      event.preventDefault();
+      gestureStartZoom = a4FullscreenZoom;
+    }, { passive: false });
+    a4PreviewBox.addEventListener('gesturechange', (event) => {
+      if (!a4Fullscreen || !Number.isFinite(event.scale)) return;
+      event.preventDefault();
+      changeA4FullscreenZoom(gestureStartZoom * event.scale, zoomAnchorFromEvent(event));
+    }, { passive: false });
+    a4PreviewBox.addEventListener('scroll', () => syncA4PageSideNavigation(a4PreviewBox), { passive: true });
     a4PreviewBox.addEventListener('click', (event) => {
       const control = event.target.closest('[data-study-action]');
       if (!control) return;
+      event.stopPropagation();
       const id = control.dataset.id;
       const studyAction = control.dataset.studyAction;
       if (studyAction === 'value') {
@@ -6344,6 +6718,10 @@ function attach() {
         const expanded = state.expandedA4Hints.has(id);
         if (expanded) state.expandedA4Hints.delete(id);
         else state.expandedA4Hints.add(id);
+        if (a4Fullscreen) {
+          const pageIndex = a4Pages().findIndex(({ rows }) => rows.some((row) => row.id === id));
+          if (pageIndex >= 0) a4FullscreenPageIndex = pageIndex;
+        }
         renderA4View();
       }
     });
@@ -6363,6 +6741,45 @@ function attach() {
       save();
     });
   }
+
+  a4Layout?.addEventListener('keydown', (event) => {
+    if (!a4Fullscreen) return;
+    if (event.target.closest('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
+    if (event.key === 'Escape') {
+      if (document.fullscreenElement) return;
+      event.preventDefault();
+      event.stopPropagation();
+      toggleA4Fullscreen(false);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      changeA4FullscreenPage(-1);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      changeA4FullscreenPage(1);
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      changeA4FullscreenZoom(a4FullscreenZoom + 0.2);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      changeA4FullscreenZoom(a4FullscreenZoom - 0.2);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      changeA4FullscreenZoom(1);
+    }
+  });
+  document.getElementById('a4FullscreenBtn')?.addEventListener('click', () => toggleA4Fullscreen(true));
+  document.querySelector('[data-a4-skimming-end]')?.addEventListener('click', () => {
+    toggleA4Fullscreen(false, { confirmEnd: false });
+  });
+  document.querySelector('[data-a4-skimming-retry]')?.addEventListener('click', (event) => {
+    event.currentTarget.disabled = true;
+    void persistPendingA4SkimmingSessions();
+  });
+  document.querySelector('[data-a4-page-prev]')?.addEventListener('click', () => changeA4FullscreenPage(-1));
+  document.querySelector('[data-a4-page-next]')?.addEventListener('click', () => changeA4FullscreenPage(1));
+  document.querySelector('[data-a4-zoom-out]')?.addEventListener('click', () => changeA4FullscreenZoom(a4FullscreenZoom - 0.2));
+  document.querySelector('[data-a4-zoom-in]')?.addEventListener('click', () => changeA4FullscreenZoom(a4FullscreenZoom + 0.2));
+  document.querySelector('[data-a4-zoom-fit]')?.addEventListener('click', () => changeA4FullscreenZoom(1));
 
   const a4SwapBtn = document.getElementById('a4SwapBtn');
   if (a4SwapBtn) {
@@ -6455,7 +6872,7 @@ function attach() {
 const resizeObserver = new ResizeObserver(() => {
   const box = document.getElementById('a4PreviewBox');
   if (!box) return;
-  const next = Math.min(1, Math.max(0.2, (box.clientWidth || SHEET_W_PX) / SHEET_W_PX));
+  const next = a4ScaleForBox(box);
   if (Math.abs(next - currentScale) > 0.002) renderA4View();
 });
 
