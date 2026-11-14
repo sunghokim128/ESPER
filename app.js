@@ -37,7 +37,8 @@ import {
   reviewFsrsCard,
   saveFsrsData,
   synchronizeFsrsProject,
-} from './lib/fsrs.js?v=8';
+  updateFsrsCardFingerprint,
+} from './lib/fsrs.js?v=9';
 import {
   deleteProjectRecord,
   createProjectDirectory,
@@ -765,11 +766,14 @@ function swappedPair(pair) {
 }
 
 function studyShownPair(pair) {
+  return studyPairIsSwapped(pair) ? { ...pair, key: pair.value, value: pair.key } : pair;
+}
+
+function studyPairIsSwapped(pair) {
   const session = state.study;
-  const shouldSwap = state.studySettings.randomizeKeyValue
+  return Boolean(state.studySettings.randomizeKeyValue
     ? session?.randomizedSwapIds?.has(pair.id)
-    : state.studySettings.swapKeyValue;
-  return shouldSwap ? { ...pair, key: pair.value, value: pair.key } : pair;
+    : state.studySettings.swapKeyValue);
 }
 
 function randomizeStudyPairDirections(session) {
@@ -3540,10 +3544,34 @@ function studySettingsHTML() {
         ${state.studyKeyError ? `<p class="study-settings-error" role="alert">${esc(state.studyKeyError)}</p>` : ''}
         <button type="button" class="study-reset-shortcuts" data-study-reset-shortcuts>${L('기본값으로 되돌리기', 'Reset to defaults')}</button>
       </details>
-      <div class="study-edit-card-row">
-        <button type="button" class="btn study-edit-card-button" data-study-action="edit-card"${state.study?.started && !state.studySaving ? '' : ' disabled'} title="${L('학습을 종료하고 기록을 저장한 뒤, 지금 보던 카드의 행을 편집 페이지에서 열어요.', 'Ends the round, saves its record, and opens this card\'s row on the edit page.')}">✎ ${L('카드 바로 수정', 'Edit this card')}</button>
-      </div>
     </div>`;
+}
+
+function studyTextEditButtonHTML() {
+  const disabled = state.studySaving || state.pendingReview ? ' disabled' : '';
+  return `<button type="button" class="study-edit-text-button" data-study-action="edit-text"${disabled} aria-label="${L('보이는 텍스트 편집', 'Edit visible text')}" title="${L('보이는 텍스트 편집', 'Edit visible text')}">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5 4 4M4 20l4.3-.9L19.6 7.8a2.1 2.1 0 0 0-3-3L5.3 16.1 4 20Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>`;
+}
+
+function studyCardTextEditorHTML(edit, pair) {
+  const fields = edit.fields.map((field) => `
+    <label class="study-inline-edit-field${field.name === 'hint' ? ' is-hint' : ''}">
+      <span>${esc(field.label)}</span>
+      ${field.hasImages
+        ? `<div class="study-inline-edit-readonly">${richText(pair[field.name])}</div>`
+        : `<textarea rows="3" data-study-edit-field="${field.name}" aria-label="${esc(field.label)}">${esc(edit.drafts[field.name])}</textarea>`}
+    </label>`).join('');
+  const hasImages = edit.fields.some((field) => field.hasImages);
+  const hasEditableText = Object.keys(edit.drafts).length > 0;
+  return `<div class="study-inline-edit">
+    ${fields}
+    ${hasImages ? `<p class="study-inline-edit-note">${L('이미지가 포함된 영역은 그대로 유지돼요. 이미지 편집은 아직 지원하지 않아요.', 'Fields containing images stay unchanged; image editing is not supported yet.')}</p>` : ''}
+    <div class="study-inline-edit-actions">
+      <button type="button" class="btn" data-study-edit-action="cancel"${state.studySaving ? ' disabled' : ''}>${L('취소', 'Cancel')}</button>
+      <button type="button" class="btn btn-primary" data-study-edit-action="save"${state.studySaving || !hasEditableText ? ' disabled' : ''}>${L('저장', 'Save')}</button>
+    </div>
+  </div>`;
 }
 
 function studyHTML() {
@@ -3551,6 +3579,7 @@ function studyHTML() {
   const queue = buildStudyQueue();
   const pair = session?.started ? studyCurrentPair() : null;
   const shown = pair ? studyShownPair(pair) : null;
+  const editing = pair && session?.editingCard?.pairId === pair.id ? session.editingCard : null;
   const record = pair ? fsrsRecordForCard(pair.id) : null;
   const overview = fsrsOverview();
   const elapsed = session?.started ? Date.now() - session.startedAt : 0;
@@ -3571,9 +3600,11 @@ function studyHTML() {
         <button type="button" class="study-start-button" data-study-action="start">Start</button>
       </div>`
     : pair && session
-    ? `<article class="study-card${session.flipped ? ' is-flipped' : ''}${session.enterEffect ? ` enter-${session.enterEffect}` : ''}" data-study-flip tabindex="0" aria-label="${L('카드. Space 키로 뒤집기','Card. Press Space to flip')}">
+    ? `<article class="study-card${session.flipped ? ' is-flipped' : ''}${session.enterEffect ? ` enter-${session.enterEffect}` : ''}${editing ? ' is-editing' : ''}" data-study-flip tabindex="0" aria-label="${L('카드. Space 키로 뒤집기','Card. Press Space to flip')}">
         ${session.flipped
           ? `<div class="study-card-face study-card-back">
+              ${editing ? studyCardTextEditorHTML(editing, pair) : `
+              ${studyTextEditButtonHTML()}
               <button type="button" class="study-speak" data-study-action="speak" aria-label="${L('key 발음 듣기','Listen to the key')}" title="${L('발음 듣기','Pronunciation')}">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l4 3V7l-4 3H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
               </button>
@@ -3583,8 +3614,11 @@ function studyHTML() {
                   ? `<p class="study-hint">${pair.hint ? richText(pair.hint) : esc(L('등록된 hint가 없어요.','No hint available.'))}</p>`
                   : `<button type="button" class="study-reveal-extra" data-study-action="back-hint">${L('hint 보기','Show hint')}</button>`}
               </div>
+              `}
             </div>`
           : `<div class="study-card-face study-card-front">
+              ${editing ? studyCardTextEditorHTML(editing, pair) : `
+              ${studyTextEditButtonHTML()}
               <button type="button" class="study-speak" data-study-action="speak" aria-label="${L('key 발음 듣기','Listen to the key')}" title="${L('발음 듣기','Pronunciation')}">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l4 3V7l-4 3H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
               </button>
@@ -3595,6 +3629,7 @@ function studyHTML() {
               <button type="button" class="study-hint-toggle" data-study-action="hint">
                 ${session.hintOpen ? L('hint 닫기','Hide hint') : L('hint 보기','Show hint')}
               </button>
+              `}
             </div>`}
       </article>`
     : `<div class="study-empty">
@@ -3631,14 +3666,14 @@ function studyHTML() {
         ${session?.started ? `<div class="study-topline">
           <div class="study-session-info">
             <span id="studyTimer" class="study-timer">${formatStudyTime(elapsed)}</span>
-            <button type="button" class="btn study-end-session-button" data-study-action="exit"${state.studySaving ? ' disabled' : ''}>${L('학습 끝내기','End study')}</button>
+            <button type="button" class="btn study-end-session-button" data-study-action="exit"${state.studySaving || session.editingCard ? ' disabled' : ''}>${L('학습 끝내기','End study')}</button>
           </div>
         </div>` : ''}
         <p class="study-error" role="alert"${state.studyError ? '' : ' hidden'}>${esc(state.studyError)}</p>
         <section class="study-stage" aria-label="${L('플래시카드 페이지','Flashcards page')}">
           ${cardMarkup}
         </section>
-        ${pair ? `<div class="study-card-actions">
+        ${pair && !editing ? `<div class="study-card-actions">
           ${session.history.length && !state.pendingReview ? `<button type="button" class="btn study-undo-button" data-study-action="undo"${state.studySaving ? ' disabled' : ''} aria-label="${L('선택 되돌리기', 'Undo rating')}" title="${esc(shortcutKeyLabel(state.studySettings.shortcuts.undo))}">
             <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="m8 14-4-4 4-4M4 10h8a5 5 0 0 1 5 5v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>${L('되돌리기', 'Undo')}</span>
@@ -5267,14 +5302,188 @@ async function undoStudyRating() {
   }
 }
 
-async function editCurrentStudyCard() {
+function beginStudyCardTextEdit() {
   const session = state.study;
   const pair = session?.started ? studyCurrentPair() : null;
-  if (!pair || !state.project || state.studySaving) return;
-  const projectId = state.project.id;
-  await finishStudy('workspace');
-  if (state.page === 'study') return;
-  await editProject(projectId, pair.id);
+  if (!pair || state.studySaving || state.pendingReview) return;
+  const swapped = studyPairIsSwapped(pair);
+  const primaryField = session.flipped
+    ? (swapped ? 'key' : 'value')
+    : (swapped ? 'value' : 'key');
+  const fields = [{
+    name: primaryField,
+    label: session.flipped ? L('뒷면 텍스트', 'Back text') : L('앞면 텍스트', 'Front text'),
+  }];
+  const hintVisible = session.flipped
+    ? session.settings.showHintOnBack || session.showBackHint
+    : session.hintOpen;
+  if (hintVisible && pair.hint) fields.push({ name: 'hint', label: L('힌트', 'Hint') });
+  const visibleFields = fields.map((field) => ({
+    ...field,
+    hasImages: splitImageText(pair[field.name]).some((part) => part.type === 'image'),
+  }));
+  session.editingCard = {
+    pairId: pair.id,
+    fields: visibleFields,
+    drafts: Object.fromEntries(
+      visibleFields
+        .filter((field) => !field.hasImages)
+        .map((field) => [field.name, pair[field.name]])
+    ),
+  };
+  state.studyError = '';
+  render();
+  appEl.querySelector('[data-study-edit-field]')?.focus({ preventScroll: true });
+}
+
+function cancelStudyCardTextEdit() {
+  const session = state.study;
+  if (!session?.editingCard || state.studySaving) return;
+  session.editingCard = null;
+  state.studyError = '';
+  render();
+}
+
+async function saveStudyCardTextEdit() {
+  const session = state.study;
+  const edit = session?.editingCard;
+  const pair = studyCurrentPair();
+  const project = state.project;
+  const previousFile = state.sourceFile;
+  const previousFsrsData = state.fsrsData;
+  if (
+    !edit ||
+    !pair ||
+    pair.id !== edit.pairId ||
+    !project ||
+    !previousFile ||
+    !previousFsrsData ||
+    state.studySaving ||
+    state.pendingReview
+  ) return;
+
+  const updates = {};
+  for (const [field, draft] of Object.entries(edit.drafts)) {
+    const value = String(draft).replace(/\r\n?/g, '\n');
+    if (value === pair[field]) continue;
+    if ((field === 'key' || field === 'value') && !value.trim()) {
+      state.studyError = L('Key와 Value는 비워 둘 수 없어요.', 'Key and value cannot be empty.');
+      render();
+      appEl.querySelector(`[data-study-edit-field="${field}"]`)?.focus({ preventScroll: true });
+      return;
+    }
+    updates[field] = value;
+  }
+  if (!Object.keys(updates).length) {
+    session.editingCard = null;
+    state.studyError = '';
+    render();
+    return;
+  }
+  if (!(await ensureWorkbookDirectoryAccess())) {
+    state.studyError = L(
+      '저장 폴더에 접근할 수 없어요. 권한을 확인한 뒤 다시 시도해 주세요.',
+      'Cannot access the save folder. Check its permission and try again.'
+    );
+    render();
+    return;
+  }
+
+  state.studySaving = true;
+  state.studyError = '';
+  state.processingMessage = L('카드 텍스트를 저장하는 중…', 'Saving card text…');
+  processingProjectIds.add(project.id);
+  render();
+
+  let workbookWriteAttempted = false;
+  let projectSaveAttempted = false;
+  let fsrsSaveAttempted = false;
+  try {
+    const rows = await readSheetGrid(previousFile);
+    let rowIndex = Number.isInteger(pair.sourceRow)
+      ? rows.findIndex((row, index) => index > 0 && row.sourceRow === pair.sourceRow)
+      : -1;
+    if (rowIndex < 1) {
+      rowIndex = rows.findIndex((row, index) =>
+        index > 0 &&
+        row[0] === pair.key &&
+        row[1] === pair.value &&
+        (row[2] ?? '') === pair.hint
+      );
+    }
+    if (rowIndex < 1) throw new Error(L('원본 Excel에서 이 카드의 행을 찾을 수 없어요.', 'Could not find this card in the source workbook.'));
+    const columnForField = { key: 0, value: 1, hint: 2 };
+    for (const [field, value] of Object.entries(updates)) {
+      rows[rowIndex][columnForField[field]] = value;
+    }
+
+    const workbook = await writeSheetGrid(previousFile, rows);
+    const nextFile = new File([workbook], project.fileName, {
+      type: previousFile.type,
+      lastModified: Date.now(),
+    });
+    const updatedPair = { ...pair, ...updates };
+    let pairFound = false;
+    const updatedPairs = state.pairs.map((item) => {
+      if (item.id !== pair.id) return item;
+      pairFound = true;
+      return updatedPair;
+    });
+    if (!pairFound) throw new Error(L('수정할 카드를 현재 프로젝트에서 찾을 수 없어요.', 'Could not find this card in the current project.'));
+    const updatedProject = { ...project, pairs: updatedPairs };
+    const fsrsUpdate = await updateFsrsCardFingerprint(updatedProject, previousFsrsData, updatedPair);
+
+    workbookWriteAttempted = true;
+    await writeProjectWorkbook(project.name, project.fileName, nextFile);
+    projectSaveAttempted = true;
+    await saveProject(updatedProject);
+    fsrsSaveAttempted = true;
+    await saveFsrsData(updatedProject, fsrsUpdate.data);
+
+    session.history.forEach(({ before }) => {
+      const record = before.cards.find((item) => item.id === pair.id);
+      if (record) record.fingerprint = fsrsUpdate.fingerprint;
+    });
+    state.project = updatedProject;
+    state.projects = state.projects.map((item) => item.id === updatedProject.id ? updatedProject : item);
+    state.pairs = updatedPairs;
+    state.sourceFile = nextFile;
+    state.fsrsData = fsrsUpdate.data;
+    session.editingCard = null;
+  } catch (error) {
+    const rollbackErrors = [];
+    if (fsrsSaveAttempted) {
+      try {
+        await saveFsrsData(project, previousFsrsData);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (projectSaveAttempted) {
+      try {
+        await saveProject(project);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (workbookWriteAttempted) {
+      try {
+        await writeProjectWorkbook(project.name, project.fileName, previousFile);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    const rollbackMessage = rollbackErrors.length
+      ? ` ${L('원본으로 되돌리지 못했습니다.', 'Rollback failed.')}: ${rollbackErrors.map((item) => item instanceof Error ? item.message : String(item)).join('; ')}`
+      : '';
+    state.studyError = `${L('카드 텍스트를 저장하지 못했어요.', 'Could not save the card text.')}: ${error instanceof Error ? error.message : String(error)}${rollbackMessage}`;
+    console.error('Could not save edited flashcard text.', error);
+  } finally {
+    state.studySaving = false;
+    state.processingMessage = '';
+    processingProjectIds.delete(project.id);
+    render();
+  }
 }
 async function showStudySpeech() {
   const current = studyCurrentPair();
@@ -5362,6 +5571,14 @@ async function leaveStudyFullscreen() {
 
 async function finishStudy(returnPage = 'study', { timeLimitReached = false } = {}) {
   const session = state.study;
+  if (session?.editingCard) {
+    state.studyError = L(
+      '카드 편집을 저장하거나 취소한 뒤 학습을 종료할 수 있어요.',
+      'Save or cancel the card edit before ending the round.'
+    );
+    render();
+    return;
+  }
   if (state.pendingReview) {
     state.studyError = L(
       '저장되지 않은 복습 결과가 있어요. 복습 결과를 저장한 뒤 회차를 종료해 주세요.',
@@ -5983,6 +6200,14 @@ async function handleStudyKeydown(event) {
   if (state.studySaving) return;
   const key = studyShortcutKey(event);
   if (!key) return;
+  const target = event.target;
+  if (state.study?.editingCard) {
+    if (key === 'Escape') {
+      event.preventDefault();
+      cancelStudyCardTextEdit();
+    }
+    return;
+  }
   if (state.studyKeyCapture) {
     event.preventDefault();
     const action = state.studyKeyCapture;
@@ -6001,7 +6226,6 @@ async function handleStudyKeydown(event) {
     render();
     return;
   }
-  const target = event.target;
   if (target instanceof HTMLElement && (
     target.isContentEditable ||
     target.matches('input, textarea, select, [role="dialog"]') ||
@@ -6100,7 +6324,8 @@ function attachStudy() {
     if (
       elapsed >= session.settings.roundTimeLimitMinutes * 60_000 &&
       !state.pendingReview &&
-      !state.studySaving
+      !state.studySaving &&
+      !session.editingCard
     ) {
       void finishStudy('study', { timeLimitReached: true });
     }
@@ -6109,7 +6334,27 @@ function attachStudy() {
     studyTimerInterval = window.setInterval(updateTimer, 1000);
   }
 
+  appEl.querySelectorAll('[data-study-edit-field]').forEach((input) => {
+    const field = input.dataset.studyEditField;
+    const edit = state.study?.editingCard;
+    if (!edit || !Object.hasOwn(edit.drafts, field)) return;
+    input.value = edit.drafts[field];
+    input.addEventListener('input', () => {
+      if (state.study?.editingCard?.pairId === edit.pairId) {
+        state.study.editingCard.drafts[field] = input.value;
+      }
+    });
+  });
+
   appEl.onclick = async (event) => {
+    const editActionButton = event.target.closest('[data-study-edit-action]');
+    if (editActionButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (editActionButton.dataset.studyEditAction === 'save') await saveStudyCardTextEdit();
+      else if (editActionButton.dataset.studyEditAction === 'cancel') cancelStudyCardTextEdit();
+      return;
+    }
     const ratingButton = event.target.closest('[data-study-rating]');
     if (ratingButton) {
       event.preventDefault();
@@ -6124,11 +6369,11 @@ function attachStudy() {
       const action = actionButton.dataset.studyAction;
       if (action === 'exit') await finishStudy();
       else if (action === 'start') await beginStudySession();
+      else if (action === 'edit-text') beginStudyCardTextEdit();
       else if (action === 'restart') await startStudy();
       else if (action === 'more-new') await addMoreNewCards();
       else if (action === 'retry-review') await retryPendingReviewSave();
       else if (action === 'undo') await undoStudyRating();
-      else if (action === 'edit-card') await editCurrentStudyCard();
       else if (action === 'speak') await showStudySpeech();
       else if (action === 'hint' && state.study) {
         state.study.hintOpen = !state.study.hintOpen;
@@ -6139,7 +6384,7 @@ function attachStudy() {
       }
       return;
     }
-    if (event.target.closest('[data-study-flip]') && state.study) {
+    if (event.target.closest('[data-study-flip]') && state.study && !state.study.editingCard) {
       state.study.flipped = !state.study.flipped;
       render();
       return;

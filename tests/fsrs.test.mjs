@@ -11,6 +11,7 @@ import {
   summarizeExamReadiness,
   examMaximumInterval,
   rescheduleFsrsData,
+  updateFsrsCardFingerprint,
 } from '../lib/fsrs.js';
 import {
   createStudyWorkbook,
@@ -70,6 +71,30 @@ test('FSRS project snapshots preserve the manual daily pace mode', async () => {
   };
   const result = await reconcileFsrsData(plannedProject, [pair('alpha')], null);
   assert.deepEqual(result.data.plan, plannedProject.plan);
+});
+
+test('editing card text updates its fingerprint without resetting its review state', async () => {
+  const initial = await reconcileFsrsData(project, [pair('alpha')], null);
+  const id = initial.pairs[0].id;
+  const reviewed = (await reviewFsrsCard(
+    project,
+    initial.data,
+    id,
+    FsrsRating.Good,
+    new Date('2026-01-02T00:00:00.000Z')
+  )).data;
+  const originalRecord = reviewed.cards.find((record) => record.id === id);
+  const editedPair = { ...initial.pairs[0], value: 'corrected answer' };
+  const updated = await updateFsrsCardFingerprint(project, reviewed, editedPair);
+  const updatedRecord = updated.data.cards.find((record) => record.id === id);
+
+  assert.notEqual(updated.fingerprint, originalRecord.fingerprint);
+  assert.deepEqual(updatedRecord.card, originalRecord.card);
+  assert.deepEqual(updatedRecord.reviewLogs, originalRecord.reviewLogs);
+
+  const synchronized = await reconcileFsrsData(project, [editedPair], JSON.stringify(updated.data));
+  assert.equal(synchronized.pairs[0].id, id);
+  assert.equal(synchronized.data.cards.filter((record) => record.archivedAt === null).length, 1);
 });
 
 test('sync preserves identities through reordering and archives changed or deleted cards', async () => {
