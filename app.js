@@ -2855,8 +2855,8 @@ function headerHTML() {
         <span class="brand-acronym">Excel-based Spaced-repetition Program for Efficient Retention</span>
       </button>
       ${['workspace', 'home'].includes(state.page) ? '' : `<nav class="global-nav" aria-label="${L('주요 페이지','Main pages')}">
-        <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습하기','Study')}</button>
-        <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>A4 view</button>
+        <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>Flashcards</button>
+        <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>Skimming</button>
         <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습 상태','Learning status')}</button>
       </nav>`}
       <div class="site-head-right">
@@ -2876,7 +2876,7 @@ function startHTML() {
       <section class="home-upload-section" aria-label="${L('엑셀 학습 목록 업로드', 'Upload an Excel study set')}">
         <div class="guide-heading upload-section-heading">
           <h2>${L('새 학습 프로젝트 만들기', 'Create a new study project')}</h2>
-          <p>${L('A4 view에서 항목을 한눈에 살펴보고, 아직 익숙하지 않은 항목은 학습하기 페이지의 플래시카드로 복습해 보세요.', 'Review items at a glance in A4 view, then practice unfamiliar ones with flashcards on the Study page.')}</p>
+          <p>${L('Skimming에서 항목을 한눈에 살펴보고, 아직 익숙하지 않은 항목은 Flashcards에서 복습해 보세요.', 'Review items at a glance in Skimming, then practice unfamiliar ones with Flashcards.')}</p>
           <div class="workspace-page-actions">
             <button type="button" class="create-project-button" data-open-format-guide aria-haspopup="dialog">
               <span class="create-project-icon" aria-hidden="true">＋</span>
@@ -3546,12 +3546,6 @@ function studySettingsHTML() {
     </div>`;
 }
 
-function fullscreenExitIconHTML() {
-  return `<svg class="fullscreen-exit-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
-    <path d="M9 2v6H3M15 2v6h6M3 16h6v6M21 16h-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
-
 function studyHTML() {
   const session = state.study;
   const queue = buildStudyQueue();
@@ -3560,7 +3554,6 @@ function studyHTML() {
   const record = pair ? fsrsRecordForCard(pair.id) : null;
   const overview = fsrsOverview();
   const elapsed = session?.started ? Date.now() - session.startedAt : 0;
-  const seenCount = session?.seenIds.size || 0;
   const ratings = [
     { grade: FsrsRating.Again, action: 'again', label: 'Again' },
     { grade: FsrsRating.Hard, action: 'hard', label: 'Hard' },
@@ -3627,8 +3620,6 @@ function studyHTML() {
         </svg>
       </button>
       <aside class="study-sidebar" aria-label="${L('설정','Settings')}">
-        <div class="study-sidebar-topbar">
-        </div>
         <button type="button" id="collapseStudySidebarBtn" class="study-sidebar-collapse" aria-label="${L('설정 접기','Collapse settings')}" title="${L('설정 접기','Collapse settings')}">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M19 12H5m6-6-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -3636,23 +3627,22 @@ function studyHTML() {
           ${studySettingsHTML()}
         </div>
       </aside>
-      <section class="study-content" aria-label="${L('학습하기 페이지','Study page')}">
-        <div class="study-topline">
+      <section class="study-content" aria-label="${L('플래시카드 페이지','Flashcards page')}">
+        ${session?.started ? `<div class="study-topline">
           <div class="study-session-info">
             <span id="studyTimer" class="study-timer">${formatStudyTime(elapsed)}</span>
-            ${session?.started ? `<button type="button" class="btn study-back-button" data-study-action="exit">${L('회차 종료','End round')}</button>` : ''}
-            ${session ? `<span class="study-progress">${session.started
-              ? `${Math.min(session.index + 1, session.cards.length)} / ${session.cards.length} · ${L(`이번 회차 ${seenCount}개`,`${seenCount} this round`)}`
-              : L(`${session.cards.length}개 항목 준비됨`,`${session.cards.length} items ready`)}</span>` : ''}
+            <button type="button" class="btn study-end-session-button" data-study-action="exit"${state.studySaving ? ' disabled' : ''}>${L('학습 끝내기','End study')}</button>
           </div>
-          ${session?.started ? `<button type="button" class="study-fullscreen-button${state.studyFullscreen ? ' study-fullscreen-exit' : ''}" data-study-action="fullscreen" aria-label="${state.studyFullscreen ? L('전체화면 종료','Exit full screen') : L('전체화면','Full screen')}" title="${state.studyFullscreen ? L('전체화면 종료','Exit full screen') : L('전체화면','Full screen')}">${state.studyFullscreen ? fullscreenExitIconHTML() : L('⛶ 전체화면','⛶ Full screen')}</button>` : ''}
-        </div>
+        </div>` : ''}
         <p class="study-error" role="alert"${state.studyError ? '' : ' hidden'}>${esc(state.studyError)}</p>
-        <section class="study-stage" aria-label="${L('학습하기 페이지','Study page')}">
+        <section class="study-stage" aria-label="${L('플래시카드 페이지','Flashcards page')}">
           ${cardMarkup}
         </section>
         ${pair ? `<div class="study-card-actions">
-          ${session.history.length && !state.pendingReview ? `<button type="button" class="btn study-undo-button" data-study-action="undo"${state.studySaving ? ' disabled' : ''} title="${esc(shortcutKeyLabel(state.studySettings.shortcuts.undo))}">↩ ${L('선택 되돌리기', 'Undo rating')}</button>` : ''}
+          ${session.history.length && !state.pendingReview ? `<button type="button" class="btn study-undo-button" data-study-action="undo"${state.studySaving ? ' disabled' : ''} aria-label="${L('선택 되돌리기', 'Undo rating')}" title="${esc(shortcutKeyLabel(state.studySettings.shortcuts.undo))}">
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="m8 14-4-4 4-4M4 10h8a5 5 0 0 1 5 5v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>${L('되돌리기', 'Undo')}</span>
+          </button>` : ''}
           ${!session.flipped
             ? `<span class="study-rating-prompt">${L('답을 확인한 뒤 복습 등급을 선택하세요.', 'Reveal the answer before choosing a review rating.')}</span>`
             : state.pendingReview
@@ -5178,13 +5168,13 @@ async function addMoreNewCards() {
   }
 }
 
-function beginStudySession() {
+async function beginStudySession() {
   const session = state.study;
   if (!session || session.started || state.studySaving) return;
   session.started = true;
   session.startedAt = Date.now();
   enterStudyCard(session);
-  render();
+  await enterStudyFullscreen();
 }
 
 function advanceStudy(rating, before) {
@@ -5196,7 +5186,7 @@ function advanceStudy(rating, before) {
   session.index += 1;
   session.enterEffect = 'review';
   if (session.index >= session.cards.length) {
-    finishStudy(false);
+    finishStudy();
     return;
   }
   enterStudyCard(session);
@@ -5282,7 +5272,7 @@ async function editCurrentStudyCard() {
   const pair = session?.started ? studyCurrentPair() : null;
   if (!pair || !state.project || state.studySaving) return;
   const projectId = state.project.id;
-  await finishStudy(false, 'workspace');
+  await finishStudy('workspace');
   if (state.page === 'study') return;
   await editProject(projectId, pair.id);
 }
@@ -5359,7 +5349,18 @@ async function saveStudySettings() {
   }
 }
 
-async function finishStudy(askForConfirmation = false, returnPage = 'study', { timeLimitReached = false } = {}) {
+async function leaveStudyFullscreen() {
+  if (!state.studyFullscreen) return;
+  state.studyFullscreen = false;
+  if (!document.fullscreenElement) return;
+  try {
+    await document.exitFullscreen();
+  } catch (error) {
+    console.warn('Could not exit browser fullscreen after ending study.', error);
+  }
+}
+
+async function finishStudy(returnPage = 'study', { timeLimitReached = false } = {}) {
   const session = state.study;
   if (state.pendingReview) {
     state.studyError = L(
@@ -5369,22 +5370,19 @@ async function finishStudy(askForConfirmation = false, returnPage = 'study', { t
     render();
     return;
   }
-  if (state.studyFullscreen) {
-    state.studyFullscreen = false;
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  }
   if (!session) {
+    await leaveStudyFullscreen();
     state.page = returnPage;
     render();
     return;
   }
   if (!session.started) {
+    await leaveStudyFullscreen();
     state.study = null;
     state.page = returnPage;
     render();
     return;
   }
-  if (askForConfirmation && !window.confirm(L('이번 학습 회차를 종료하고 기록을 저장할까요?', 'End this study round and save its record?'))) return;
   if (state.studySaving) return;
   state.studySaving = true;
   state.studyError = '';
@@ -5410,6 +5408,7 @@ async function finishStudy(askForConfirmation = false, returnPage = 'study', { t
     state.studyRecords = null;
     state.logDeleteError = '';
     if (!(await save())) throw new Error(state.error || L('프로젝트 정보를 저장하지 못했어요.', 'Could not save project information.'));
+    await leaveStudyFullscreen();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     state.study = null;
     state.studySaving = false;
@@ -5942,7 +5941,7 @@ async function navigateGlobalPage(destination) {
     if (state.page === 'edit' && state.editDirty &&
       !window.confirm(L('저장하지 않은 변경사항을 버릴까요?', 'Discard your unsaved changes?'))) return;
     if (state.study?.started) {
-      await finishStudy(true, 'workspace');
+      await finishStudy('workspace');
       return;
     }
     state.page = 'workspace';
@@ -5950,10 +5949,10 @@ async function navigateGlobalPage(destination) {
     return;
   }
   if (!state.project) return;
-  // Leaving an in-progress study round ends it (after confirmation).
+  // Save the current round before navigating away from Flashcards.
   if (destination !== 'study' && state.study?.started) {
     const interim = destination === 'a4' ? 'a4' : 'learning-status';
-    await finishStudy(true, interim);
+    await finishStudy(interim);
     if (state.study) return;
     if (destination === 'a4' || destination === 'status') return;
   }
@@ -6011,13 +6010,14 @@ async function handleStudyKeydown(event) {
   if (!state.study?.started) {
     if (shortcutKeyId(state.studySettings.shortcuts.exit) === shortcutKeyId(key)) {
       event.preventDefault();
-      finishStudy(true);
+      finishStudy();
     }
     return;
   }
   const action = Object.entries(state.studySettings.shortcuts)
     .find(([, assignedKey]) => shortcutKeyId(assignedKey) === shortcutKeyId(key))?.[0];
   if (!action) return;
+  if (action === 'exit' && key === 'Escape' && state.studyFullscreen && document.fullscreenElement) return;
   event.preventDefault();
   const ratingByAction = {
     again: FsrsRating.Again,
@@ -6038,17 +6038,14 @@ async function handleStudyKeydown(event) {
   } else if (action === 'speak') {
     await showStudySpeech();
   } else if (action === 'exit') {
-    if (state.studyFullscreen) await toggleStudyFullscreen(false);
-    else finishStudy(true);
+    await finishStudy();
   }
 }
 
-async function toggleStudyFullscreen(force) {
-  const next = typeof force === 'boolean' ? force : !state.studyFullscreen;
-  state.studyFullscreen = next;
+async function enterStudyFullscreen() {
+  state.studyFullscreen = true;
   try {
-    if (next && !document.fullscreenElement) await document.documentElement.requestFullscreen();
-    else if (!next && document.fullscreenElement) await document.exitFullscreen();
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
   } catch {
     // CSS 전체화면 레이아웃만 사용
   }
@@ -6057,8 +6054,7 @@ async function toggleStudyFullscreen(force) {
 
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && state.studyFullscreen) {
-    state.studyFullscreen = false;
-    render();
+    void handleStudyFullscreenExit();
   }
   if (!document.fullscreenElement && a4Fullscreen) {
     if (!confirmA4SkimmingEnd()) {
@@ -6082,6 +6078,16 @@ document.addEventListener('fullscreenchange', () => {
   }
 });
 
+async function handleStudyFullscreenExit() {
+  await finishStudy();
+  if (!state.studyFullscreen || document.fullscreenElement) return;
+  try {
+    await document.documentElement.requestFullscreen();
+  } catch (error) {
+    console.warn('Could not restore browser fullscreen after study exit was blocked.', error);
+  }
+}
+
 function attachStudy() {
   if (state.study?.enterEffect) state.study.enterEffect = '';
   if (studyTimerInterval) window.clearInterval(studyTimerInterval);
@@ -6096,7 +6102,7 @@ function attachStudy() {
       !state.pendingReview &&
       !state.studySaving
     ) {
-      void finishStudy(false, 'study', { timeLimitReached: true });
+      void finishStudy('study', { timeLimitReached: true });
     }
   };
   if (state.study?.started) {
@@ -6116,11 +6122,10 @@ function attachStudy() {
       event.preventDefault();
       event.stopPropagation();
       const action = actionButton.dataset.studyAction;
-      if (action === 'exit') await finishStudy(true);
-      else if (action === 'start') beginStudySession();
+      if (action === 'exit') await finishStudy();
+      else if (action === 'start') await beginStudySession();
       else if (action === 'restart') await startStudy();
       else if (action === 'more-new') await addMoreNewCards();
-      else if (action === 'fullscreen') await toggleStudyFullscreen();
       else if (action === 'retry-review') await retryPendingReviewSave();
       else if (action === 'undo') await undoStudyRating();
       else if (action === 'edit-card') await editCurrentStudyCard();
@@ -6217,7 +6222,7 @@ function attachStudy() {
     });
   });
 
-  document.getElementById('homeBtn')?.addEventListener('click', () => finishStudy(true, 'workspace'));
+  document.getElementById('homeBtn')?.addEventListener('click', () => finishStudy('workspace'));
 }
 
 document.addEventListener('change', async (event) => {
