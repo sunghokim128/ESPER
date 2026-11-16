@@ -4638,10 +4638,10 @@ function syncA4FullscreenControls(box, totalPages) {
     toolbar.querySelector('[data-a4-zoom-fit]').setAttribute('aria-pressed', String(a4FullscreenZoom === 1));
   }
   box.querySelectorAll('.frame').forEach((frame, index) => {
-    frame.hidden = index !== a4FullscreenPageIndex;
+    frame.hidden = a4Fullscreen && index !== a4FullscreenPageIndex;
   });
   box.querySelectorAll('.a4-section-divider').forEach((divider) => {
-    divider.hidden = true;
+    divider.hidden = a4Fullscreen;
   });
   syncA4PageSideNavigation(box);
 }
