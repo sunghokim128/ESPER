@@ -314,6 +314,9 @@ const state = {
   revealedA4Values: new Set(),
   hiddenA4Values: new Set(),
   expandedA4Hints: new Set(),
+  a4EditingCard: null,
+  a4EditError: '',
+  a4EditSaving: false,
   showAllA4Values: true,
   sourceName: '',
   sourceFile: null,
@@ -1369,6 +1372,8 @@ async function importWorkbookFile(file, images = []) {
     state.revealedA4Values = new Set();
     state.hiddenA4Values = new Set();
     state.expandedA4Hints = new Set();
+    state.a4EditingCard = null;
+    state.a4EditError = '';
     state.showAllA4Values = true;
     state.a4Title = null;
     state.a4Info = null;
@@ -1816,6 +1821,8 @@ async function openProject(id, destination = 'study') {
     state.revealedA4Values = new Set();
     state.hiddenA4Values = new Set();
     state.expandedA4Hints = new Set();
+    state.a4EditingCard = null;
+    state.a4EditError = '';
     state.showAllA4Values = true;
     state.a4Order = state.pairs.map((pair) => pair.id);
     state.a4Query = '';
@@ -4415,7 +4422,37 @@ function a4SectionLabel(section, sectionStart) {
       : '';
 }
 
+function a4CardTextEditorHTML(pair, edit) {
+  const fields = [
+    { name: 'key', label: 'Key' },
+    { name: 'value', label: 'Value' },
+    { name: 'hint', label: 'Hint' },
+  ];
+  const hasImages = fields.some(({ name }) => splitImageText(pair[name]).some((part) => part.type === 'image'));
+  return `<div class="a4-row-edit-panel">
+    ${fields.map(({ name, label }) => {
+      const imageParts = splitImageText(edit.drafts[name]).filter((part) => part.type === 'image');
+      return `<label class="a4-row-edit-field">
+        <span class="a4-row-edit-label">${label}
+          <button type="button" class="a4-row-edit-image-button" data-a4-add-image="${name}" aria-label="${esc(L(`${label}에 이미지 추가`, `Add image to ${label}`))}" title="${esc(L('이미지 추가', 'Add image'))}">
+            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor"/><circle cx="5" cy="6" r="1.2" fill="currentColor"/><path d="m3 12 3.2-3 2 1.7 2.2-2 2.6 3.3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 1v4M10.5 3h4" stroke="currentColor" stroke-linecap="round"/></svg>
+          </button>
+        </span>
+        <textarea rows="2" data-a4-edit-field="${name}" aria-label="${esc(label)}">${esc(stripImageTags(edit.drafts[name]))}</textarea>
+        ${imageParts.length ? `<span class="a4-row-edit-images">${imageParts.map((part) => richText(imageTag(part.id))).join('')}</span>` : ''}
+      </label>`;
+    }).join('')}
+    ${hasImages ? `<p class="a4-row-edit-note">${L('기존 이미지는 유지돼요. 이미지 위치 변경·삭제·자르기는 지원하지 않아요.', 'Existing images are preserved; repositioning, deleting, and cropping are not supported.')}</p>` : ''}
+    ${state.a4EditError ? `<p class="a4-row-edit-error" role="alert">${esc(state.a4EditError)}</p>` : ''}
+    <div class="a4-row-edit-actions">
+      <button type="button" class="btn" data-a4-edit-action="cancel"${state.a4EditSaving ? ' disabled' : ''}>${L('취소', 'Cancel')}</button>
+      <button type="button" class="btn btn-primary" data-a4-edit-action="save"${state.a4EditSaving ? ' disabled' : ''}>${state.a4EditSaving ? L('저장 중…', 'Saving…') : L('저장', 'Save')}</button>
+    </div>
+  </div>`;
+}
+
 function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLabel = '') {
+  const pairsById = new Map(state.pairs.map((pair) => [pair.id, pair]));
   return `<div class="sheet a4-sheet${isLastPage ? ' a4-last-page' : ''}">
       <div class="sheet-head">
         <div>
@@ -4436,18 +4473,27 @@ function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLab
           )
           .join('')}
       </div>
-      <div class="sheet-rows">
+      <div class="sheet-rows${rows.some((row) => row.id === state.a4EditingCard?.pairId) ? ' has-a4-row-edit' : ''}">
         ${[0, 1]
           .map(
             (column) => `<div class="sheet-column">
               ${rows
                 .filter((row) => row.column === column)
                 .map((row) => {
+                  const editing = state.a4EditingCard?.pairId === row.id;
+                  if (editing) {
+                    const pair = pairsById.get(row.id);
+                    if (!pair) return '';
+                    return `<div class="sheet-row study-sheet-row study-row-editing" data-study-id="${esc(row.id)}">
+                      <button type="button" class="col-no a4-edit-number" data-a4-edit-toggle="${esc(row.id)}" aria-expanded="true" aria-label="${esc(L(`편집 접기 ${row.index}번`, `Close editor for item ${row.index}`))}">${String(row.index).padStart(3, '0')}</button>
+                      ${a4CardTextEditorHTML(pair, state.a4EditingCard)}
+                    </div>`;
+                  }
                   const valueVisible = isA4ValueVisible(row.id);
                   const hintVisible = state.expandedA4Hints.has(row.id);
                   const hasHint = row.hasStudyHint;
                   return `<div class="sheet-row study-sheet-row${hintVisible ? ' study-hint-visible' : ''}" data-study-id="${esc(row.id)}" style="flex-grow:${isLastPage || hintVisible ? 0 : 1}">
-                    <span class="col-no">${String(row.index).padStart(3, '0')}</span>
+                    <button type="button" class="col-no a4-edit-number" data-a4-edit-toggle="${esc(row.id)}" aria-expanded="false" aria-label="${esc(L(`${row.index}번 항목 편집`, `Edit item ${row.index}`))}">${String(row.index).padStart(3, '0')}</button>
                     <span class="col-key">
                       ${
                         hasHint
@@ -5504,6 +5550,186 @@ async function saveStudyCardTextEdit() {
     render();
   }
 }
+
+function beginA4CardTextEdit(pairId) {
+  if (state.a4EditSaving) return;
+  if (state.a4EditingCard) {
+    state.a4EditError = L(
+      '현재 편집 내용을 저장하거나 취소한 뒤 다른 항목을 편집해 주세요.',
+      'Save or cancel the current edit before editing another item.'
+    );
+    renderA4View();
+    return;
+  }
+  const pair = state.pairs.find((item) => item.id === pairId);
+  if (!pair) return;
+  state.a4EditingCard = {
+    pairId,
+    drafts: Object.fromEntries(
+      ['key', 'value', 'hint']
+        .filter((field) => !splitImageText(pair[field]).some((part) => part.type === 'image'))
+        .map((field) => [field, pair[field]])
+    ),
+  };
+  state.a4EditError = '';
+  renderA4View();
+  document.querySelector('[data-a4-edit-field]')?.focus({ preventScroll: true });
+}
+
+function cancelA4CardTextEdit() {
+  if (state.a4EditSaving) return;
+  state.a4EditingCard = null;
+  state.a4EditError = '';
+  renderA4View();
+}
+
+async function saveA4CardTextEdit() {
+  const edit = state.a4EditingCard;
+  const pair = state.pairs.find((item) => item.id === edit?.pairId);
+  const project = state.project;
+  const previousFile = state.sourceFile;
+  const previousFsrsData = state.fsrsData;
+  if (!edit || !pair || !project || !previousFile || !previousFsrsData || state.a4EditSaving) return;
+
+  const updates = {};
+  for (const [field, draft] of Object.entries(edit.drafts)) {
+    const value = String(draft).replace(/\r\n?/g, '\n');
+    if (value === pair[field]) continue;
+    if ((field === 'key' || field === 'value') && !value.trim()) {
+      state.a4EditError = L('Key와 Value는 비워 둘 수 없어요.', 'Key and value cannot be empty.');
+      renderA4View();
+      document.querySelector(`[data-a4-edit-field="${field}"]`)?.focus({ preventScroll: true });
+      return;
+    }
+    updates[field] = value;
+  }
+  if (!Object.keys(updates).length) {
+    state.a4EditingCard = null;
+    state.a4EditError = '';
+    renderA4View();
+    return;
+  }
+  if (!(await ensureWorkbookDirectoryAccess())) {
+    state.a4EditError = L(
+      '저장 폴더에 접근할 수 없어요. 권한을 확인한 뒤 다시 시도해 주세요.',
+      'Cannot access the save folder. Check its permission and try again.'
+    );
+    renderA4View();
+    return;
+  }
+
+  state.a4EditSaving = true;
+  state.a4EditError = '';
+  processingProjectIds.add(project.id);
+  renderA4View();
+  let workbookWriteAttempted = false;
+  let projectSaveAttempted = false;
+  let fsrsSaveAttempted = false;
+  try {
+    const rows = await readSheetGrid(previousFile);
+    let rowIndex = Number.isInteger(pair.sourceRow)
+      ? rows.findIndex((row, index) => index > 0 && row.sourceRow === pair.sourceRow)
+      : -1;
+    if (rowIndex < 1) {
+      rowIndex = rows.findIndex((row, index) =>
+        index > 0 &&
+        row[0] === pair.key &&
+        row[1] === pair.value &&
+        (row[2] ?? '') === pair.hint
+      );
+    }
+    if (rowIndex < 1) throw new Error(L('원본 Excel에서 이 카드를 찾을 수 없어요.', 'Could not find this card in the source workbook.'));
+    const columnForField = { key: 0, value: 1, hint: 2 };
+    for (const [field, value] of Object.entries(updates)) rows[rowIndex][columnForField[field]] = value;
+
+    const workbook = await writeSheetGrid(previousFile, rows);
+    const nextFile = new File([workbook], project.fileName, {
+      type: previousFile.type,
+      lastModified: Date.now(),
+    });
+    const updatedPair = { ...pair, ...updates };
+    let pairFound = false;
+    const updatedPairs = state.pairs.map((item) => {
+      if (item.id !== pair.id) return item;
+      pairFound = true;
+      return updatedPair;
+    });
+    if (!pairFound) throw new Error(L('수정할 카드를 현재 프로젝트에서 찾을 수 없어요.', 'Could not find this card in the current project.'));
+    const updatedProject = { ...project, pairs: updatedPairs };
+    const fsrsUpdate = await updateFsrsCardFingerprint(updatedProject, previousFsrsData, updatedPair);
+
+    workbookWriteAttempted = true;
+    await writeProjectWorkbook(project.name, project.fileName, nextFile);
+    projectSaveAttempted = true;
+    await saveProject(updatedProject);
+    fsrsSaveAttempted = true;
+    await saveFsrsData(updatedProject, fsrsUpdate.data);
+
+    state.project = updatedProject;
+    state.projects = state.projects.map((item) => item.id === updatedProject.id ? updatedProject : item);
+    state.pairs = updatedPairs;
+    state.sourceFile = nextFile;
+    state.fsrsData = fsrsUpdate.data;
+    state.a4EditingCard = null;
+  } catch (error) {
+    const rollbackErrors = [];
+    if (fsrsSaveAttempted) {
+      try {
+        await saveFsrsData(project, previousFsrsData);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (projectSaveAttempted) {
+      try {
+        await saveProject(project);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (workbookWriteAttempted) {
+      try {
+        await writeProjectWorkbook(project.name, project.fileName, previousFile);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    const rollbackMessage = rollbackErrors.length
+      ? ` ${L('원본으로 되돌리지 못했습니다.', 'Rollback failed.')}: ${rollbackErrors.map((item) => item instanceof Error ? item.message : String(item)).join('; ')}`
+      : '';
+    state.a4EditError = `${L('카드 텍스트를 저장하지 못했어요.', 'Could not save the card text.')}: ${error instanceof Error ? error.message : String(error)}${rollbackMessage}`;
+    console.error('Could not save edited A4 card text.', error);
+  } finally {
+    state.a4EditSaving = false;
+    processingProjectIds.delete(project.id);
+    renderA4View();
+  }
+}
+
+async function addA4CardImage(field) {
+  const project = state.project;
+  const edit = state.a4EditingCard;
+  if (!project || !edit || state.a4EditSaving || !['key', 'value', 'hint'].includes(field)) return;
+  const file = await pickImageFile();
+  if (!file) return;
+  try {
+    const id = await saveImageBlob(file, project.name);
+    const input = document.querySelector(`[data-a4-edit-field="${field}"]`);
+    const text = input?.value ?? stripImageTags(edit.drafts[field]);
+    const imageTags = splitImageText(edit.drafts[field])
+      .filter((part) => part.type === 'image')
+      .map((part) => imageTag(part.id));
+    imageTags.push(imageTag(id));
+    edit.drafts[field] = `${text}${imageTags.join('')}`;
+    state.a4EditError = '';
+    renderA4View();
+    document.querySelector(`[data-a4-edit-field="${field}"]`)?.focus({ preventScroll: true });
+  } catch (error) {
+    state.a4EditError = `${L('이미지를 추가하지 못했어요.', 'Could not add the image.')}: ${error instanceof Error ? error.message : String(error)}`;
+    renderA4View();
+  }
+}
+
 async function showStudySpeech() {
   const current = studyCurrentPair();
   const pair = current && studyShownPair(current);
@@ -6968,6 +7194,30 @@ function attach() {
     }, { passive: false });
     a4PreviewBox.addEventListener('scroll', () => syncA4PageSideNavigation(a4PreviewBox), { passive: true });
     a4PreviewBox.addEventListener('click', (event) => {
+      const addImageButton = event.target.closest('[data-a4-add-image]');
+      if (addImageButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        void addA4CardImage(addImageButton.dataset.a4AddImage);
+        return;
+      }
+      const editAction = event.target.closest('[data-a4-edit-action]');
+      if (editAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (editAction.dataset.a4EditAction === 'save') void saveA4CardTextEdit();
+        else cancelA4CardTextEdit();
+        return;
+      }
+      const editToggle = event.target.closest('[data-a4-edit-toggle]');
+      if (editToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = editToggle.dataset.a4EditToggle;
+        if (state.a4EditingCard?.pairId === id) cancelA4CardTextEdit();
+        else beginA4CardTextEdit(id);
+        return;
+      }
       const control = event.target.closest('[data-study-action]');
       if (!control) return;
       event.stopPropagation();
@@ -6993,6 +7243,16 @@ function attach() {
         }
         renderA4View();
       }
+    });
+    a4PreviewBox.addEventListener('input', (event) => {
+      const field = event.target.closest('[data-a4-edit-field]');
+      if (!field || !state.a4EditingCard) return;
+      const name = field.dataset.a4EditField;
+      const imageTags = splitImageText(state.a4EditingCard.drafts[name])
+        .filter((part) => part.type === 'image')
+        .map((part) => imageTag(part.id));
+      state.a4EditingCard.drafts[name] = `${field.value}${imageTags.join('')}`;
+      state.a4EditError = '';
     });
     a4PreviewBox.addEventListener('input', (event) => {
       const editor = event.target.closest('[data-study-edit]');
