@@ -96,6 +96,8 @@ Choose where your study files are stored, and copy or move the folder yourself w
 Reconnect the same folder to continue your projects with their saved progress.<br>
 You can use different folders as separate workspaces for different sets of projects. These workspaces may feel like separate accounts, but ESPER does not create or manage user accounts.
 
+When you open a project or its editor, ESPER reads the workbook and reconciles its items with the FSRS file. Newly added rows become new cards, removed rows are archived, and the daily new-card pace is recalculated from the current deck. Changes made to the workbook outside ESPER are picked up the next time you open the project; the browser does not watch the folder continuously.
+
 <br><br>
 
 ## Data storage and privacy

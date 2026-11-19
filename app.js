@@ -1794,9 +1794,10 @@ async function openProject(id, destination = 'study') {
     if (normalized.converted) {
       await writeProjectWorkbook(project.name, project.fileName, file);
     }
+    const workbookPairs = await parseStudyFile(file);
     const synchronized = await synchronizeFsrsProject(
       project,
-      project.pairs.map(normalizeStudyPair)
+      workbookPairs.map(normalizeStudyPair)
     );
     project.pairs = synchronized.pairs;
     await saveProject(project);
@@ -2039,9 +2040,10 @@ async function editProject(id, focusPairId = null) {
     if (normalized.converted) {
       await writeProjectWorkbook(project.name, project.fileName, file);
     }
+    const workbookPairs = await parseStudyFile(file);
     const synchronized = await synchronizeFsrsProject(
       project,
-      project.pairs.map(normalizeStudyPair)
+      workbookPairs.map(normalizeStudyPair)
     );
     project.pairs = synchronized.pairs;
     await saveProject(project);
@@ -2053,6 +2055,7 @@ async function editProject(id, focusPairId = null) {
     state.logPreviewError = '';
     state.fsrsData = synchronized.data;
     state.pairs = synchronized.pairs.map(normalizeStudyPair);
+    state.study = null;
     state.sourceFile = file;
     state.editRows = rows;
     state.editDirty = false;
@@ -2213,6 +2216,7 @@ async function saveEditedProject() {
     state.logPreviewError = '';
     state.fsrsData = synchronized.data;
     state.pairs = synchronized.pairs.map(normalizeStudyPair);
+    state.study = null;
     state.sourceFile = nextFile;
     state.editRows = nextRows;
     state.editDirty = false;

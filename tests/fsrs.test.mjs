@@ -119,6 +119,35 @@ test('sync preserves identities through reordering and archives changed or delet
   assert.ok(edited.data.cards.some((card) => card.id === edited.pairs[0].id && card.archivedAt === null));
 });
 
+test('workbook rows added outside the app reconcile as new FSRS cards', async () => {
+  const originalFile = new File(
+    [await createStudyWorkbook([['alpha', 'answer', '']])],
+    'Example.xlsx'
+  );
+  const originalPairs = await parseStudyFile(originalFile);
+  const initial = await reconcileFsrsData(project, originalPairs, null);
+  const alphaId = initial.pairs[0].id;
+
+  const changedWorkbook = await writeSheetGrid(originalFile, [
+    ['key', 'value', 'hint'],
+    ['alpha', 'answer', ''],
+    ['beta', 'answer for beta', ''],
+    ['gamma', 'answer for gamma', ''],
+  ]);
+  const changedFile = new File([changedWorkbook], 'Example.xlsx');
+  const updated = await reconcileFsrsData(
+    project,
+    await parseStudyFile(changedFile),
+    JSON.stringify(initial.data)
+  );
+
+  assert.equal(updated.pairs[0].id, alphaId);
+  assert.equal(updated.data.cards.filter((record) => record.archivedAt === null).length, 3);
+  assert.equal(updated.data.cards.filter((record) =>
+    record.id !== alphaId && record.archivedAt === null && record.card.state === FsrsState.New
+  ).length, 2);
+});
+
 test('ambiguous duplicate-count changes archive old records instead of reassigning them', async () => {
   const duplicates = await reconcileFsrsData(project, [pair('same'), pair('same')], null);
   const oldIds = new Set(duplicates.pairs.map((item) => item.id));
