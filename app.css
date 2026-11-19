@@ -4390,6 +4390,41 @@ body:has(.app-shell.workspace-page) {
   padding: 14px clamp(12px, 2vw, 28px);
 }
 
+.study-screen.is-fullscreen .study-progress {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 10px;
+  background: #303030;
+}
+
+.study-progress-track {
+  height: 5px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+}
+
+.study-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #d7b99b;
+  transition: width 180ms ease;
+}
+
+.study-progress-count {
+  flex: none;
+  color: #d5d0c8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .study-screen.is-fullscreen .study-key-hint {
   display: none;
 }

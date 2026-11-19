@@ -3583,6 +3583,9 @@ function studyHTML() {
   const record = pair ? fsrsRecordForCard(pair.id) : null;
   const overview = fsrsOverview();
   const elapsed = session?.started ? Date.now() - session.startedAt : 0;
+  const studyProgressPercent = session?.started
+    ? Math.round(((session.index + 1) / session.cards.length) * 100)
+    : 0;
   const ratings = [
     { grade: FsrsRating.Again, action: 'again', label: 'Again' },
     { grade: FsrsRating.Hard, action: 'hard', label: 'Hard' },
@@ -3663,6 +3666,18 @@ function studyHTML() {
         </div>
       </aside>
       <section class="study-content" aria-label="${L('플래시카드 페이지','Flashcards page')}">
+        ${state.studyFullscreen && session?.started ? `<div class="study-progress">
+          <div
+            class="study-progress-track"
+            role="progressbar"
+            aria-label="${L('학습 진행률','Study progress')}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="${studyProgressPercent}"
+            aria-valuetext="${L(`카드 ${session.index + 1}/${session.cards.length}`, `Card ${session.index + 1} of ${session.cards.length}`)}"
+          ><span style="width: ${studyProgressPercent}%"></span></div>
+          <span class="study-progress-count">${session.index + 1} / ${session.cards.length}</span>
+        </div>` : ''}
         ${session?.started ? `<div class="study-topline">
           <div class="study-session-info">
             <span id="studyTimer" class="study-timer">${formatStudyTime(elapsed)}</span>
