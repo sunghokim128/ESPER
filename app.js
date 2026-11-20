@@ -1218,7 +1218,7 @@ async function handleFile(file) {
 }
 
 const TUTORIAL_DECK_FILES = {
-  ko: '튜토리얼 영단어 덱.xlsx',
+  ko: '고난도 편입 영단어 모음.xlsx',
   en: 'Tutorial Vocab Deck.xlsx',
 };
 
