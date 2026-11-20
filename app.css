@@ -993,13 +993,18 @@ body:has(.app-shell.workspace-page) {
     text-align: left;
   }
 
-  .study-inline-edit-field > span {
+  .study-inline-edit-label {
+    display: grid;
+    gap: 6px;
+  }
+
+  .study-inline-edit-label > span {
     color: #756a5d;
     font-size: 12px;
     font-weight: 700;
   }
 
-  .study-inline-edit-field textarea {
+  .study-inline-edit-label textarea {
     width: 100%;
     min-height: 96px;
     box-sizing: border-box;
@@ -1020,21 +1025,56 @@ body:has(.app-shell.workspace-page) {
     font-size: clamp(16px, 2.4vw, 23px);
   }
 
-  .study-inline-edit-readonly {
-    max-width: 100%;
+  .study-inline-edit-images {
+    display: flex;
     max-height: 120px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
     overflow: auto;
-    color: #33271f;
-    font-size: clamp(18px, 2.6vw, 28px);
-    line-height: 1.5;
-    text-align: center;
   }
 
-  .study-inline-edit-note {
+  .study-inline-edit-image {
+    position: relative;
+    display: grid;
+    min-width: 40px;
+    min-height: 40px;
+    place-items: center;
+    border: 1px solid #d8cfc2;
+    border-radius: 8px;
+    background: rgba(255,255,255,.86);
+  }
+
+  .study-card .study-inline-edit-image .cell-img {
+    max-width: 140px;
+    max-height: 100px;
     margin: 0;
-    color: #756a5d;
-    font-size: 12px;
-    text-align: center;
+  }
+
+  .study-inline-edit-image-delete {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(80, 48, 36, .2);
+    border-radius: 50%;
+    background: #fffefa;
+    color: #9c3d2c;
+    font: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .study-inline-edit-image-delete:disabled,
+  .study-inline-edit-image-add:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+  }
+
+  .study-inline-edit-image-add {
+    justify-self: center;
   }
 
   .study-inline-edit-actions {

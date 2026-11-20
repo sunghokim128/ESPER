@@ -2753,6 +2753,27 @@ async function deleteProject(id) {
     render();
     return;
   }
+  let hasStudyRecords;
+  try {
+    const studyRecords = await readStudyRecordFile(project.name);
+    hasStudyRecords = Boolean(studyRecords?.sessions.length);
+  } catch (error) {
+    state.error = `${L('학습 기록을 확인하지 못해 프로젝트를 삭제할 수 없어요', 'Could not check the study records; the project was not deleted')}: ${error instanceof Error ? error.message : String(error)}`;
+    render();
+    return;
+  }
+  if (hasStudyRecords) {
+    const enteredName = window.prompt(L(
+      `학습 기록이 있는 프로젝트예요. 삭제하려면 프로젝트 이름을 정확히 입력해 주세요: ${project.name}`,
+      `This project has study records. To delete it, type the project name exactly: ${project.name}`
+    ));
+    if (enteredName === null) return;
+    if (enteredName !== project.name) {
+      state.notice = L('프로젝트 이름이 일치하지 않아 삭제를 취소했어요.', 'Project name did not match; deletion was canceled.');
+      render();
+      return;
+    }
+  }
   const confirmation = [
     L(
       `"${project.name}" 프로젝트 폴더와 그 안의 Excel 파일, FSRS 기록, Study Record, 이미지를 모두 삭제합니다.`,
@@ -3560,27 +3581,35 @@ function studySettingsHTML() {
 
 function studyTextEditButtonHTML() {
   const disabled = state.studySaving || state.pendingReview ? ' disabled' : '';
-  return `<button type="button" class="study-edit-text-button" data-study-action="edit-text"${disabled} aria-label="${L('보이는 텍스트 편집', 'Edit visible text')}" title="${L('보이는 텍스트 편집', 'Edit visible text')}">
+  return `<button type="button" class="study-edit-text-button" data-study-action="edit-card"${disabled} aria-label="${L('보이는 카드 내용 편집', 'Edit visible card content')}" title="${L('보이는 카드 내용 편집', 'Edit visible card content')}">
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m15 5 4 4M4 20l4.3-.9L19.6 7.8a2.1 2.1 0 0 0-3-3L5.3 16.1 4 20Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>`;
 }
 
-function studyCardTextEditorHTML(edit, pair) {
-  const fields = edit.fields.map((field) => `
-    <label class="study-inline-edit-field${field.name === 'hint' ? ' is-hint' : ''}">
-      <span>${esc(field.label)}</span>
-      ${field.hasImages
-        ? `<div class="study-inline-edit-readonly">${richText(pair[field.name])}</div>`
-        : `<textarea rows="3" data-study-edit-field="${field.name}" aria-label="${esc(field.label)}">${esc(edit.drafts[field.name])}</textarea>`}
-    </label>`).join('');
-  const hasImages = edit.fields.some((field) => field.hasImages);
-  const hasEditableText = Object.keys(edit.drafts).length > 0;
+function studyCardTextEditorHTML(edit) {
+  const fields = edit.fields.map((field) => {
+    const images = edit.images[field.name] || [];
+    return `
+      <div class="study-inline-edit-field${field.name === 'hint' ? ' is-hint' : ''}">
+        <label class="study-inline-edit-label">
+          <span>${esc(field.label)}</span>
+          <textarea rows="3" data-study-edit-field="${field.name}" aria-label="${esc(field.label)}"${state.studySaving ? ' disabled' : ''}>${esc(edit.drafts[field.name])}</textarea>
+        </label>
+        <div class="study-inline-edit-images">
+          ${images.map((image, index) => `
+            <span class="study-inline-edit-image">
+              ${richText(imageTag(image.id))}
+              <button type="button" class="study-inline-edit-image-delete" data-study-image-delete="${field.name}" data-study-image-index="${index}" aria-label="${esc(L(`이미지 ${index + 1} 삭제`, `Delete image ${index + 1}`))}" title="${L('이미지 연결 삭제', 'Remove image')}"${state.studySaving ? ' disabled' : ''}>×</button>
+            </span>`).join('')}
+        </div>
+        <button type="button" class="btn study-inline-edit-image-add" data-study-image-add="${field.name}"${state.studySaving ? ' disabled' : ''}>${L('+ 이미지 추가', '+ Add image')}</button>
+      </div>`;
+  }).join('');
   return `<div class="study-inline-edit">
     ${fields}
-    ${hasImages ? `<p class="study-inline-edit-note">${L('이미지가 포함된 영역은 그대로 유지돼요. 이미지 편집은 아직 지원하지 않아요.', 'Fields containing images stay unchanged; image editing is not supported yet.')}</p>` : ''}
     <div class="study-inline-edit-actions">
       <button type="button" class="btn" data-study-edit-action="cancel"${state.studySaving ? ' disabled' : ''}>${L('취소', 'Cancel')}</button>
-      <button type="button" class="btn btn-primary" data-study-edit-action="save"${state.studySaving || !hasEditableText ? ' disabled' : ''}>${L('저장', 'Save')}</button>
+      <button type="button" class="btn btn-primary" data-study-edit-action="save"${state.studySaving ? ' disabled' : ''}>${L('저장', 'Save')}</button>
     </div>
   </div>`;
 }
@@ -3617,7 +3646,7 @@ function studyHTML() {
     ? `<article class="study-card${session.flipped ? ' is-flipped' : ''}${session.enterEffect ? ` enter-${session.enterEffect}` : ''}${editing ? ' is-editing' : ''}" data-study-flip tabindex="0" aria-label="${L('카드. Space 키로 뒤집기','Card. Press Space to flip')}">
         ${session.flipped
           ? `<div class="study-card-face study-card-back">
-              ${editing ? studyCardTextEditorHTML(editing, pair) : `
+              ${editing ? studyCardTextEditorHTML(editing) : `
               ${studyTextEditButtonHTML()}
               <button type="button" class="study-speak" data-study-action="speak" aria-label="${L('key 발음 듣기','Listen to the key')}" title="${L('발음 듣기','Pronunciation')}">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l4 3V7l-4 3H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
@@ -3631,7 +3660,7 @@ function studyHTML() {
               `}
             </div>`
           : `<div class="study-card-face study-card-front">
-              ${editing ? studyCardTextEditorHTML(editing, pair) : `
+              ${editing ? studyCardTextEditorHTML(editing) : `
               ${studyTextEditButtonHTML()}
               <button type="button" class="study-speak" data-study-action="speak" aria-label="${L('key 발음 듣기','Listen to the key')}" title="${L('발음 듣기','Pronunciation')}">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h3l4 3V7l-4 3H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
@@ -5367,7 +5396,7 @@ async function undoStudyRating() {
   }
 }
 
-function beginStudyCardTextEdit() {
+function beginStudyCardEdit() {
   const session = state.study;
   const pair = session?.started ? studyCurrentPair() : null;
   if (!pair || state.studySaving || state.pendingReview) return;
@@ -5383,17 +5412,18 @@ function beginStudyCardTextEdit() {
     ? session.settings.showHintOnBack || session.showBackHint
     : session.hintOpen;
   if (hintVisible && pair.hint) fields.push({ name: 'hint', label: L('힌트', 'Hint') });
-  const visibleFields = fields.map((field) => ({
-    ...field,
-    hasImages: splitImageText(pair[field.name]).some((part) => part.type === 'image'),
+  const images = Object.fromEntries(fields.map((field) => {
+    let originalIndex = 0;
+    return [field.name, splitImageText(pair[field.name])
+      .filter((part) => part.type === 'image')
+      .map((part) => ({ id: part.id, originalIndex: originalIndex++ }))];
   }));
   session.editingCard = {
     pairId: pair.id,
-    fields: visibleFields,
+    fields,
+    images,
     drafts: Object.fromEntries(
-      visibleFields
-        .filter((field) => !field.hasImages)
-        .map((field) => [field.name, pair[field.name]])
+      fields.map((field) => [field.name, stripImageTags(pair[field.name])])
     ),
   };
   state.studyError = '';
@@ -5409,7 +5439,7 @@ function cancelStudyCardTextEdit() {
   render();
 }
 
-async function saveStudyCardTextEdit() {
+async function saveStudyCardEdit() {
   const session = state.study;
   const edit = session?.editingCard;
   const pair = studyCurrentPair();
@@ -5428,16 +5458,36 @@ async function saveStudyCardTextEdit() {
   ) return;
 
   const updates = {};
-  for (const [field, draft] of Object.entries(edit.drafts)) {
-    const value = String(draft).replace(/\r\n?/g, '\n');
-    if (value === pair[field]) continue;
-    if ((field === 'key' || field === 'value') && !value.trim()) {
+  for (const field of edit.fields) {
+    const text = String(edit.drafts[field.name]).replace(/\r\n?/g, '\n');
+    const images = edit.images[field.name] || [];
+    let value;
+    if (text === stripImageTags(pair[field.name])) {
+      const retainedImages = new Map(images
+        .filter((image) => image.originalIndex !== null)
+        .map((image) => [image.originalIndex, image]));
+      let originalIndex = 0;
+      value = splitImageText(pair[field.name]).map((part) => {
+        if (part.type === 'text') return part.value;
+        const index = originalIndex++;
+        const image = retainedImages.get(index);
+        return image ? imageTag(image.id) : '';
+      }).join('');
+      value += images
+        .filter((image) => image.originalIndex === null)
+        .map((image) => imageTag(image.id))
+        .join('');
+    } else {
+      value = `${text}${images.map((image) => imageTag(image.id)).join('')}`;
+    }
+    if (value === pair[field.name]) continue;
+    if ((field.name === 'key' || field.name === 'value') && !text.trim()) {
       state.studyError = L('Key와 Value는 비워 둘 수 없어요.', 'Key and value cannot be empty.');
       render();
-      appEl.querySelector(`[data-study-edit-field="${field}"]`)?.focus({ preventScroll: true });
+      appEl.querySelector(`[data-study-edit-field="${field.name}"]`)?.focus({ preventScroll: true });
       return;
     }
-    updates[field] = value;
+    updates[field.name] = value;
   }
   if (!Object.keys(updates).length) {
     session.editingCard = null;
@@ -5456,7 +5506,7 @@ async function saveStudyCardTextEdit() {
 
   state.studySaving = true;
   state.studyError = '';
-  state.processingMessage = L('카드 텍스트를 저장하는 중…', 'Saving card text…');
+  state.processingMessage = L('카드 내용을 저장하는 중…', 'Saving card changes…');
   processingProjectIds.add(project.id);
   render();
 
@@ -5541,13 +5591,50 @@ async function saveStudyCardTextEdit() {
     const rollbackMessage = rollbackErrors.length
       ? ` ${L('원본으로 되돌리지 못했습니다.', 'Rollback failed.')}: ${rollbackErrors.map((item) => item instanceof Error ? item.message : String(item)).join('; ')}`
       : '';
-    state.studyError = `${L('카드 텍스트를 저장하지 못했어요.', 'Could not save the card text.')}: ${error instanceof Error ? error.message : String(error)}${rollbackMessage}`;
-    console.error('Could not save edited flashcard text.', error);
+    state.studyError = `${L('카드 내용을 저장하지 못했어요.', 'Could not save the card changes.')}: ${error instanceof Error ? error.message : String(error)}${rollbackMessage}`;
+    console.error('Could not save edited flashcard content.', error);
   } finally {
     state.studySaving = false;
     state.processingMessage = '';
     processingProjectIds.delete(project.id);
     render();
+  }
+}
+
+function removeStudyCardImage(field, imageIndex) {
+  const edit = state.study?.editingCard;
+  const images = edit?.images[field];
+  if (!edit || state.studySaving || state.pendingReview || !images || !Number.isInteger(imageIndex)) return;
+  if (imageIndex < 0 || imageIndex >= images.length) return;
+  images.splice(imageIndex, 1);
+  state.studyError = '';
+  render();
+}
+
+async function addStudyCardImage(field) {
+  const edit = state.study?.editingCard;
+  const project = state.project;
+  if (!edit || !project || state.studySaving || state.pendingReview || !edit.images[field]) return;
+  const file = await pickImageFile();
+  if (!file || state.study?.editingCard !== edit || state.project?.id !== project.id) return;
+
+  state.studySaving = true;
+  state.studyError = '';
+  state.processingMessage = L('이미지를 저장하는 중…', 'Saving image…');
+  render();
+  try {
+    const id = await saveImageBlob(file, project.name);
+    if (state.study?.editingCard === edit) {
+      edit.images[field].push({ id, originalIndex: null });
+    }
+  } catch (error) {
+    state.studyError = `${L('이미지를 추가하지 못했어요.', 'Could not add the image.')}: ${error instanceof Error ? error.message : String(error)}`;
+    console.error('Could not add an image to the flashcard.', error);
+  } finally {
+    state.studySaving = false;
+    state.processingMessage = '';
+    render();
+    appEl.querySelector(`[data-study-edit-field="${field}"]`)?.focus({ preventScroll: true });
   }
 }
 
@@ -6592,11 +6679,28 @@ function attachStudy() {
   });
 
   appEl.onclick = async (event) => {
+    const addImageButton = event.target.closest('[data-study-image-add]');
+    if (addImageButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      await addStudyCardImage(addImageButton.dataset.studyImageAdd);
+      return;
+    }
+    const deleteImageButton = event.target.closest('[data-study-image-delete]');
+    if (deleteImageButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      removeStudyCardImage(
+        deleteImageButton.dataset.studyImageDelete,
+        Number(deleteImageButton.dataset.studyImageIndex)
+      );
+      return;
+    }
     const editActionButton = event.target.closest('[data-study-edit-action]');
     if (editActionButton) {
       event.preventDefault();
       event.stopPropagation();
-      if (editActionButton.dataset.studyEditAction === 'save') await saveStudyCardTextEdit();
+      if (editActionButton.dataset.studyEditAction === 'save') await saveStudyCardEdit();
       else if (editActionButton.dataset.studyEditAction === 'cancel') cancelStudyCardTextEdit();
       return;
     }
@@ -6614,7 +6718,7 @@ function attachStudy() {
       const action = actionButton.dataset.studyAction;
       if (action === 'exit') await finishStudy();
       else if (action === 'start') await beginStudySession();
-      else if (action === 'edit-text') beginStudyCardTextEdit();
+      else if (action === 'edit-card') beginStudyCardEdit();
       else if (action === 'restart') await startStudy();
       else if (action === 'more-new') await addMoreNewCards();
       else if (action === 'retry-review') await retryPendingReviewSave();
