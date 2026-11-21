@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPages } from '../lib/sheetPages.js';
+import { buildPages, buildPriorityPages, sortByRecallProbability } from '../lib/sheetPages.js';
 
 test('A4 pagination accounts for full-width characters and expanded hints', () => {
   const items = Array.from({ length: 5 }, (_, index) => ({
@@ -24,4 +24,25 @@ test('A4 pagination accounts for full-width characters and expanded hints', () =
       assert.ok(height <= 30 * 8.2);
     }
   }
+});
+
+test('priority review output includes every sorted studied item when unstudied items are excluded', () => {
+  const reviewed = sortByRecallProbability(Array.from({ length: 7 }, (_, index) => ({
+    id: `studied-${index}`,
+    recallProbability: (7 - index) / 10,
+  })));
+  const pages = buildPriorityPages(
+    reviewed.map((item) => ({ ...item, key: item.id, value: 'answer', studied: true })),
+    [],
+    1
+  );
+  const rows = pages.flatMap((page) => page.rows);
+
+  assert.ok(pages.length > 2);
+  assert.equal(rows.length, reviewed.length);
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    reviewed.map((item) => item.id)
+  );
+  assert.ok(rows.every((row) => row.studied));
 });

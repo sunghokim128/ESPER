@@ -15,8 +15,8 @@ ESPER combines both approaches so each can complement the other.
 
 1. **Excel Import** — Upload an Excel workbook (`.xlsx` or `.xlsm`) containing the material you want to study. You can also import Anki decks (`.apkg`) and ESPER share files (`.espr`).
 2. **Study Planning** — Set an exam date and target recall level. ESPER recommends a daily number of new items based on the time remaining.
-3. **Flashcards** — Practice active recall, using hints when needed. FSRS-7 estimates how well each item is remembered and uses your **Again**, **Hard**, **Good**, or **Easy** ratings to schedule reviews. Study rounds end after 30 minutes by default; change the time limit in study settings.
-4. **Adaptive Skimming** — Generate an A4 study sheet and optionally sort it by learning priority, with items with the lowest estimated recall first. Reveal or hide values on screen, study one page at a time in fullscreen, or export the sheets to PDF for printing. Skimming time is recorded in My Log and included in daily, monthly, and yearly study-time totals.
+3. **Study** — Practice active recall, using hints when needed. FSRS-7 estimates how well each item is remembered and uses your **Again**, **Hard**, **Good**, or **Easy** ratings to schedule reviews. Study rounds end after 30 minutes by default; change the time limit in study settings. The study menu also prints previously studied items in learning-priority order, with the lowest estimated recall first; unstudied items are excluded.
+4. **Learning Materials** — Open the full A4 preview directly. From there, you can start Skimming, which supports fullscreen study and study-time tracking.
 
 ## Philosophy
 
@@ -32,7 +32,7 @@ ESPER aims to reduce the effort spent deciding what to memorize, when to review 
 2. Choose your interface language and a folder for your projects.
 3. Import an Excel workbook, Anki deck, or ESPER `.espr` file. Anki decks are converted into ESPER workbooks.
 4. In Learning status, set your exam date and target recall level. ESPER recommends finishing the first pass at about 80% of the time remaining, leaving the final period for reviews. Follow the recommended number of new items per day or set your own.
-5. Choose **Flashcards** for scheduled active-recall practice or **Skimming** for an A4 overview. Learning status shows your plan and study history.
+5. Choose **Study** for scheduled active-recall practice, or **Learning Materials** to open the A4 preview and start **Skimming**. Print studied items in priority order from the bottom of the Study menu. Learning status shows your plan and study history.
 
 <br><br>
 

@@ -311,6 +311,8 @@ const state = {
   a4PriorityData: null,
   a4PriorityPairs: null,
   a4PriorityError: '',
+  reviewPrintError: '',
+  reviewPrintPending: false,
   revealedA4Values: new Set(),
   hiddenA4Values: new Set(),
   expandedA4Hints: new Set(),
@@ -861,13 +863,13 @@ function refreshA4Priority() {
   return task;
 }
 
-function a4Pages() {
+function a4Pages({ sort = state.a4Sort, query, reviewedOnly = false } = {}) {
   const pairsById = new Map(state.pairs.map((pair) => [pair.id, pair]));
   const items = state.a4Order
     .map((id) => pairsById.get(id))
     .filter(Boolean)
-    .filter((pair) => a4PairMatchesQuery(pair));
-  if (state.a4Sort === 'priority') {
+    .filter((pair) => a4PairMatchesQuery(pair, query));
+  if (sort === 'priority') {
     const reviewed = [];
     const unreviewed = [];
     items.forEach((pair) => {
@@ -877,15 +879,12 @@ function a4Pages() {
           ...pair,
           recallProbability: state.a4RecallRates.get(pair.id) ?? 1,
         });
-      } else {
+      } else if (!reviewedOnly) {
         unreviewed.push(pair);
       }
     });
     const priorityItems = sortByRecallProbability(reviewed);
-    return buildPriorityPages(
-      a4SheetItems(priorityItems),
-      a4SheetItems(unreviewed)
-    );
+    return buildPriorityPages(a4SheetItems(priorityItems), a4SheetItems(unreviewed));
   }
   return buildPages(a4SheetItems(items)).map((rows) => ({ rows }));
 }
@@ -2883,7 +2882,11 @@ const SHARED_DECKS_URL = 'https://github.com/sunghokim128/ESPER/discussions/cate
 function headerHTML() {
   const projectsActive = ['home', 'workspace', 'edit'].includes(state.page);
   const canNavigateProject = Boolean(state.project);
-  const activePage = state.page === 'learning-status' ? 'status' : state.page;
+  const activePage = state.page === 'learning-status'
+    ? 'status'
+    : state.page === 'a4'
+      ? 'materials'
+      : state.page;
   return `
     <header class="site-head">
       <button type="button" id="homeBtn" class="brand${projectsActive ? ' is-active' : ''}" aria-label="${L('프로젝트로 이동', 'Go to projects')}" title="${L('프로젝트로 이동합니다.', 'Go to projects.')}"${projectsActive ? ' aria-current="page"' : ''}>
@@ -2891,9 +2894,9 @@ function headerHTML() {
         <span class="brand-acronym">Excel-based Spaced-repetition Program for Efficient Retention</span>
       </button>
       ${['workspace', 'home'].includes(state.page) ? '' : `<nav class="global-nav" aria-label="${L('주요 페이지','Main pages')}">
-        <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>Flashcards</button>
-        <button type="button" data-global-nav="a4"${activePage === 'a4' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>Skimming</button>
-        <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습 상태','Learning status')}</button>
+        <button type="button" data-global-nav="study"${activePage === 'study' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습하기', 'Study')}</button>
+        <button type="button" data-global-nav="status"${activePage === 'status' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습상태','Learning status')}</button>
+        <button type="button" data-global-nav="a4"${activePage === 'materials' ? ' class="is-active" aria-current="page"' : ''}${canNavigateProject ? '' : ' disabled'}>${L('학습자료', 'Learning Materials')}</button>
       </nav>`}
       <div class="site-head-right">
         <a class="how-to-use-link" href="${TUTORIAL_PAGE_URL}" target="_blank" rel="noopener noreferrer">${L('튜토리얼', 'Tutorial')}</a>
@@ -2912,7 +2915,7 @@ function startHTML() {
       <section class="home-upload-section" aria-label="${L('엑셀 학습 목록 업로드', 'Upload an Excel study set')}">
         <div class="guide-heading upload-section-heading">
           <h2>${L('새 학습 프로젝트 만들기', 'Create a new study project')}</h2>
-          <p>${L('Skimming에서 항목을 한눈에 살펴보고, 아직 익숙하지 않은 항목은 Flashcards에서 복습해 보세요.', 'Review items at a glance in Skimming, then practice unfamiliar ones with Flashcards.')}</p>
+          <p>${L('학습자료에서 항목을 한눈에 살펴보고, 아직 익숙하지 않은 항목은 학습하기에서 복습해 보세요.', 'Review items at a glance in Learning Materials, then practice unfamiliar ones in Study.')}</p>
           <div class="workspace-page-actions">
             <button type="button" class="create-project-button" data-open-format-guide aria-haspopup="dialog">
               <span class="create-project-icon" aria-hidden="true">＋</span>
@@ -3086,11 +3089,14 @@ function formatGuideHTML() {
 
 function folderConnectionHTML(compact = false, errorText = '') {
   const hasLocation = Boolean(state.directoryName && !state.directoryAccessIssue);
-  const buttonLabel = hasLocation
-    ? `${L('저장 위치', 'Save location')}: ${state.directoryName}`
-    : `${L('저장 위치', 'Save location')}: ${L('미정', 'Not set')}`;
+  const folderLabel = hasLocation ? state.directoryName : L('미정', 'Not set');
+  const buttonLabel = compact
+    ? folderLabel
+    : `${L('저장 위치', 'Save location')}: ${folderLabel}`;
   const warningText = L('이전에 저장한 내용을 불러오려면 같은 저장 위치를 선택해야 해요.', 'To load previously saved content, choose the same save location as before.');
-  const buttonTitle = hasLocation ? `${buttonLabel}. ${warningText}` : L('저장 위치 선택', 'Choose save location');
+  const buttonTitle = hasLocation
+    ? `${L('저장 위치', 'Save location')}: ${state.directoryName}. ${warningText}`
+    : L('저장 위치 선택', 'Choose save location');
   const selectionButton = `<button type="button" id="connectFolderBtn" class="btn folder-location-button" title="${esc(buttonTitle)}">${esc(buttonLabel)}</button>`;
   const warning = state.directoryName && !compact
     ? `<span class="folder-location-warning">${warningText}</span>`
@@ -3704,8 +3710,15 @@ function studyHTML() {
         <div class="study-sidebar-content">
           ${studySettingsHTML()}
         </div>
+        <div class="study-review-print">
+          <button type="button" class="study-review-print-button" data-review-print${state.reviewPrintPending || !state.pairs.length ? ' disabled' : ''}>
+            ${state.reviewPrintPending ? L('준비 중…', 'Preparing…') : L('맞춤 복습지 출력', 'Print tailored review sheet')}
+          </button>
+          <p class="study-review-print-note">${L('학습 기록이 있는 항목만 기억률이 낮은 순으로 출력해요.', 'Print studied items starting with the lowest recall probability.')}</p>
+          ${state.reviewPrintError ? `<p class="study-review-print-error" role="alert">${esc(state.reviewPrintError)}</p>` : ''}
+        </div>
       </aside>
-      <section class="study-content" aria-label="${L('플래시카드 페이지','Flashcards page')}">
+      <section class="study-content" aria-label="${L('학습하기 페이지','Study page')}">
         ${state.studyFullscreen && session?.started ? `<div class="study-progress">
           <div
             class="study-progress-track"
@@ -3725,7 +3738,7 @@ function studyHTML() {
           </div>
         </div>` : ''}
         <p class="study-error" role="alert"${state.studyError ? '' : ' hidden'}>${esc(state.studyError)}</p>
-        <section class="study-stage" aria-label="${L('플래시카드 페이지','Flashcards page')}">
+        <section class="study-stage" aria-label="${L('학습하기 페이지','Study page')}">
           ${cardMarkup}
         </section>
         ${pair && !editing ? `<div class="study-card-actions">
@@ -3937,12 +3950,13 @@ function studyLogPreviewHTML() {
   const failed = Boolean(state.logPreviewError) || !state.studyRecords;
   const view = state.logPreviewView;
   const toggle = (id, label) => `<button type="button" class="learning-status-view-button${view === id ? ' is-active' : ''}" data-log-view="${id}" aria-pressed="${view === id}"${failed ? ' disabled' : ''}>${label}</button>`;
+  const body = state.collapsedSections.log ? '' : studyLogPreviewBodyHTML();
   return `<section class="study-log-preview ls-section${failed ? ' is-disabled' : ''}${state.collapsedSections.log ? ' is-collapsed' : ''}" data-ls-section="log" data-log-preview aria-label="${L('나의 기록', 'My Log')}">
         <div class="study-log-preview-title">
           ${sectionToggleHTML('log', L('나의 기록', 'MY LOG'))}
           <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">${toggle('monthly', L('월별', 'Monthly'))}${toggle('yearly', L('연별', 'Yearly'))}</div>
         </div>
-        <div class="study-log-preview-body" data-log-preview-body>${studyLogPreviewBodyHTML()}</div>
+        <div class="study-log-preview-body" data-log-preview-body>${body}</div>
       </section>`;
 }
 
@@ -4020,7 +4034,7 @@ function bindStudyLogPreview() {
 }
 
 async function loadStudyLogPreview() {
-  if (state.studyRecords || state.logPreviewLoading || state.logPreviewError || !state.project) return;
+  if (state.collapsedSections.log || state.studyRecords || state.logPreviewLoading || state.logPreviewError || !state.project) return;
   state.logPreviewLoading = true;
   try {
     const file = await readStudyRecordFile(state.project.name);
@@ -4030,7 +4044,9 @@ async function loadStudyLogPreview() {
     state.logPreviewError = L('학습 기록을 불러오지 못했어요: ', 'Could not load study records: ') + (error instanceof Error ? error.message : String(error));
   } finally {
     state.logPreviewLoading = false;
-    const card = state.page === 'learning-status' ? appEl.querySelector('[data-log-preview]') : null;
+    const card = state.page === 'learning-status' && !state.collapsedSections.log
+      ? appEl.querySelector('[data-log-preview]')
+      : null;
     if (card) {
       card.outerHTML = studyLogPreviewHTML();
       bindStudyLogPreview();
@@ -4092,33 +4108,50 @@ function bindSectionToggles() {
   appEl.querySelectorAll('[data-ls-toggle]').forEach((button) => {
     button.onclick = async () => {
       const id = button.dataset.lsToggle;
+      const { scrollX, scrollY } = window;
       state.collapsedSections[id] = !state.collapsedSections[id];
-      button.setAttribute('aria-expanded', String(!state.collapsedSections[id]));
-      button.closest('[data-ls-section]')?.classList.toggle('is-collapsed', Boolean(state.collapsedSections[id]));
+      render();
+      appEl.querySelector(`[data-ls-toggle="${id}"]`)?.focus({ preventScroll: true });
+      window.scrollTo(scrollX, scrollY);
       await persistUserPreferences();
     };
   });
 }
 
 function learningStatusHTML() {
+  const planExpanded = !state.collapsedSections.plan;
+  const cardsExpanded = !state.collapsedSections.cards;
   const now = Date.now();
-  const { byId: pairs, invalidCount: invalidPairCount } = indexStudyPairs(state.pairs);
-  const records = (state.fsrsData?.cards || [])
-    .filter((record) => record.archivedAt === null && pairs.has(record.id))
-    .map((record) => ({
-      record,
-      pair: pairs.get(record.id),
-      category: fsrsReviewCategory(record.card, now),
-    }));
+  const { byId: pairs, invalidCount: invalidPairCount } = planExpanded || cardsExpanded
+    ? indexStudyPairs(state.pairs)
+    : { byId: new Map(), invalidCount: 0 };
+  const records = cardsExpanded
+    ? (state.fsrsData?.cards || [])
+      .filter((record) => record.archivedAt === null && pairs.has(record.id))
+      .map((record) => ({
+        record,
+        pair: pairs.get(record.id),
+        category: fsrsReviewCategory(record.card, now),
+      }))
+    : [];
   const recordsById = new Map(records.map((item) => [item.record.id, item]));
-  const sourceOrderedRecords = state.pairs.flatMap((pair) => {
+  const sourceOrderedRecords = cardsExpanded ? state.pairs.flatMap((pair) => {
     const item = recordsById.get(pair.id);
     return item ? [item] : [];
-  });
+  }) : [];
+  const newCardCount = cardsExpanded
+    ? records.filter((item) => item.category === 'new').length
+    : planExpanded
+      ? (state.fsrsData?.cards || []).filter((record) =>
+        record.archivedAt === null &&
+        pairs.has(record.id) &&
+        fsrsReviewCategory(record.card, now) === 'new'
+      ).length
+      : 0;
   const counts = {
     all: records.length,
     due: records.filter((item) => item.category === 'due').length,
-    new: records.filter((item) => item.category === 'new').length,
+    new: newCardCount,
     scheduled: records.filter((item) => item.category === 'scheduled').length,
   };
   const filters = [
@@ -4126,11 +4159,11 @@ function learningStatusHTML() {
     ['scheduled', L('학습 완료', 'Learned'), counts.scheduled],
     ['new', L('학습 전', 'Not started'), counts.new],
   ];
-  const sortedRecords = records.sort((a, b) => {
+  const sortedRecords = cardsExpanded ? records.sort((a, b) => {
     const order = { due: 0, new: 1, scheduled: 2 };
     return order[a.category] - order[b.category] ||
       Date.parse(a.record.card.dueAt) - Date.parse(b.record.card.dueAt);
-  });
+  }) : [];
   const statusLabels = {
     due: L('복습할 때예요', 'Review due'),
     new: L('학습 전', 'Not started'),
@@ -4148,12 +4181,12 @@ function learningStatusHTML() {
       <section class="ls-section${state.collapsedSections.plan ? ' is-collapsed' : ''}" data-ls-section="plan">
       <header class="learning-status-heading">
         ${sectionToggleHTML('plan', L('학습설정', 'LEARNING SETTINGS'), 'p')}
-        ${invalidPairCount ? `<p class="error" role="alert">${L(
+        ${planExpanded && invalidPairCount ? `<p class="error" role="alert">${L(
           `학습 항목 ${invalidPairCount}개에서 카드 ID를 찾지 못해 상태 목록에서 제외했어요.`,
           `${invalidPairCount} study item(s) have no card ID and were excluded from the status list.`
         )}</p>` : ''}
       </header>
-      <div class="ls-section-body">
+      ${planExpanded ? `<div class="ls-section-body">
       <div class="learning-status-top">
       <section class="exam-plan-panel exam-plan-rows">
         <div class="exam-plan-item" data-plan-item>
@@ -4246,12 +4279,12 @@ function learningStatusHTML() {
         <p class="fsrs-guide-source">${L('출처', 'Source')}: <a href="https://github.com/open-spaced-repetition/ts-fsrs" target="_blank" rel="noopener noreferrer">ts-fsrs</a> · <a href="https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler" target="_blank" rel="noopener noreferrer">Free Spaced Repetition Scheduler</a></p>
       </dialog>
       </div>
-      </div>
+      </div>` : ''}
       </section>
       ${studyLogPreviewHTML()}
       <section class="ls-section${state.collapsedSections.cards ? ' is-collapsed' : ''}" data-ls-section="cards">
       ${sectionToggleHTML('cards', L('카드 이해도', 'CARD UNDERSTANDING'), 'h2').replace('class="study-ready-eyebrow ls-section-title"','class="study-ready-eyebrow learning-status-section-title ls-section-title"')}
-      <div class="ls-section-body">
+      ${cardsExpanded ? `<div class="ls-section-body">
       <div class="learning-status-view-row">
       <div class="learning-status-view-switch" role="group" aria-label="${L('보기 방식', 'View mode')}">
         <button type="button" class="learning-status-view-button${state.learningStatusView === 'simple' ? ' is-active' : ''}" data-learning-status-view="simple" aria-controls="learningStatusOverview" aria-pressed="${state.learningStatusView === 'simple'}">${L('간단히', 'Simple')}</button>
@@ -4339,7 +4372,7 @@ function learningStatusHTML() {
       </section>
       <dialog class="learning-status-dialog" aria-label="${L('학습 항목 상세 정보', 'Learning item details')}"></dialog>
       </section>
-      </div>
+      </div>` : ''}
       </section>
     </main>`;
 }
@@ -4605,6 +4638,7 @@ function a4PrintSheetHTML(rows, pageNumber, pageCount, isLastPage = false) {
 }
 
 function refreshLearningStatusRetrievability() {
+  if (state.collapsedSections.cards) return Promise.resolve();
   if (learningStatusRefreshPromise) {
     learningStatusRefreshRequested = true;
     return learningStatusRefreshPromise;
@@ -5038,10 +5072,10 @@ function render() {
           : state.page === 'study'
             ? studyHTML()
             : state.page === 'learning-status'
-                ? learningStatusHTML()
-                : state.page === 'project-setup'
-                  ? projectSetupHTML()
-            : a4ViewHTML()}${state.languageChoicePending ? languageChoiceHTML() : ''}${state.anki ? ankiImportHTML() : ''}`;
+              ? learningStatusHTML()
+              : state.page === 'project-setup'
+                ? projectSetupHTML()
+                : a4ViewHTML()}${state.languageChoicePending ? languageChoiceHTML() : ''}${state.anki ? ankiImportHTML() : ''}`;
   appEl.innerHTML = pageHTML;
   renderProcessingIndicator();
   applyImageSizes();
@@ -5163,6 +5197,12 @@ async function handleA4Print() {
   const list = a4Pages();
   const totalPages = list.length;
   if (!totalPages) return;
+  await printA4Pages(list);
+}
+
+async function printA4Pages(list) {
+  const totalPages = list.length;
+  if (!totalPages) return;
   printEl.innerHTML = list
     .map(({ rows }, i) => {
       const isLastPage = i === list.length - 1;
@@ -5176,6 +5216,37 @@ async function handleA4Print() {
     printEl.replaceChildren();
   }, { once: true });
   window.print();
+}
+
+async function handleTailoredReviewPrint() {
+  state.reviewPrintPending = true;
+  state.reviewPrintError = '';
+  render();
+  try {
+    await refreshA4Priority();
+    if (state.a4PriorityError) {
+      state.reviewPrintError = state.a4PriorityError;
+      return;
+    }
+    const pages = a4Pages({ sort: 'priority', query: '', reviewedOnly: true });
+    if (!pages.length) {
+      state.reviewPrintError = L(
+        '학습한 항목이 없어요. 학습하기에서 학습한 뒤 다시 시도해 주세요.',
+        'You have no studied items to print yet. Study some cards and try again.'
+      );
+      return;
+    }
+    await printA4Pages(pages);
+  } catch (error) {
+    console.error('Could not print the tailored review sheet.', error);
+    state.reviewPrintError = L(
+      `맞춤 복습지를 출력하지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+      `Could not print the tailored review sheet: ${error instanceof Error ? error.message : String(error)}`
+    );
+  } finally {
+    state.reviewPrintPending = false;
+    if (state.page === 'study') render();
+  }
 }
 
 function localDateForExport() {
@@ -6503,7 +6574,7 @@ async function navigateGlobalPage(destination) {
     const interim = destination === 'a4' ? 'a4' : 'learning-status';
     await finishStudy(interim);
     if (state.study) return;
-    if (destination === 'a4' || destination === 'status') return;
+    if (['a4', 'status'].includes(destination)) return;
   }
   if (destination === 'study') {
     if (!state.study) await startStudy();
@@ -6831,6 +6902,7 @@ document.addEventListener('keydown', handleStudyKeydown);
 
 function attach() {
   attachDatePickers();
+  document.querySelector('[data-review-print]')?.addEventListener('click', handleTailoredReviewPrint);
   const guide = document.querySelector('.start-guide');
   if (guide) {
     const number = guide.querySelector('#guideColumnNumber');

@@ -7868,3 +7868,55 @@ button.study-log-calendar-cell:hover { outline: 1px solid #a45b40; }
   background: linear-gradient(135deg, #b95b39, #873c24);
   box-shadow: 0 5px 0 #682b1b, 0 13px 28px rgba(120, 52, 31, .26);
 }
+
+.study-review-print {
+  flex: none;
+  margin-top: 12px;
+  padding: 14px 12px 0 0;
+  border-top: 1px solid #e7e2d8;
+}
+
+.study-review-print-button {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid #8f3f26;
+  border-radius: 10px;
+  background: #8a4a33;
+  color: #fffaf4;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+
+.study-review-print-button:hover:not(:disabled) {
+  background: #773d28;
+}
+
+.study-review-print-button:focus-visible {
+  outline: 3px solid rgba(169, 78, 48, .3);
+  outline-offset: 3px;
+}
+
+.study-review-print-button:disabled {
+  cursor: not-allowed;
+  opacity: .7;
+}
+
+.study-review-print-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.study-review-print-error {
+  margin: 8px 0 0;
+  color: #9c2f25;
+  font-size: 12px;
+  line-height: 1.5;
+}
