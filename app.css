@@ -3434,6 +3434,10 @@ body:has(.app-shell.workspace-page) {
 
   .print-root {
     display: block;
+    -webkit-filter: grayscale(100%);
+    filter: grayscale(100%);
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
   }
 
   .study-tooltip {
