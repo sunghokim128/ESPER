@@ -190,14 +190,17 @@ test('new workbooks contain only A=key, B=value, C=hint', async () => {
   assert.doesNotMatch(sheet, /<c r="D/);
 });
 
-test('legacy status-column workbooks are parsed and edited into the three-column format', async () => {
+test('arbitrary first-row headers do not affect the fixed three-column mapping', async () => {
   const file = new File(
-    ['Understood status,key,value,hint\r\n2025-01-02,alpha,answer,clue\r\n'],
-    'legacy.csv',
-    { type: 'text/csv' }
+    [await createStudyWorkbook(
+      [['alpha', 'answer', 'clue']],
+      ['영단어', '한국어 뜻', '힌트']
+    )],
+    'arbitrary-header.xlsx',
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
   );
   const normalized = await normalizeStudyWorkbook(file);
-  assert.equal(normalized.converted, true);
+  assert.equal(normalized.converted, false);
   const [pair] = await parseStudyFile(normalized.file);
   assert.deepEqual(
     { key: pair.key, value: pair.value, hint: pair.hint },
@@ -205,7 +208,7 @@ test('legacy status-column workbooks are parsed and edited into the three-column
   );
 
   const grid = await readSheetGrid(normalized.file);
-  assert.deepEqual(grid[0], ['key', 'value', 'hint']);
+  assert.deepEqual(grid[0], ['영단어', '한국어 뜻', '힌트']);
   assert.deepEqual(grid[1], ['alpha', 'answer', 'clue']);
 
   const converted = new File([await writeSheetGrid(normalized.file, grid)], file.name, { type: file.type });
