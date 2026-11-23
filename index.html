@@ -2,6 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>ESPER</title>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-97FBRP5G8P"></script>
     <script>
@@ -10,11 +13,20 @@
       gtag('js', new Date());
       gtag('config', 'G-97FBRP5G8P');
     </script>
-    <link rel="stylesheet" href="app.css?v=137" />
+    <link rel="stylesheet" href="app.css?v=138" />
   </head>
   <body>
     <div id="app" class="app-shell"></div>
     <div id="printRoot" class="print-root"></div>
-    <script type="module" src="app.js?v=136"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch((error) => {
+            console.warn('Could not register ESPER update service worker.', error);
+          });
+        });
+      }
+    </script>
+    <script type="module" src="app.js?v=138"></script>
   </body>
 </html>
