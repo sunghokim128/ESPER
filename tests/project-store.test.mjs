@@ -10,6 +10,7 @@ import {
   projectNameExists,
   projectNameFromFileName,
   projectNameKey,
+  projectNamesMatch,
   writeFsrsDataFile,
   writeLibraryFile,
   writeProjectWorkbook,
@@ -26,6 +27,13 @@ test('normalizes duplicate project names across case and Unicode forms', () => {
   assert.equal(projectNameExists(['Cafe\u0301'], 'Café'), true);
   assert.equal(projectNameExists(['Words'], 'Other'), false);
   assert.equal(projectNameKey('Cafe\u0301'), projectNameKey('Café'));
+});
+
+test('matches deletion confirmation names across case, whitespace, and Unicode forms', () => {
+  assert.equal(projectNamesMatch('  Café  ', 'Cafe\u0301'), true);
+  assert.equal(projectNamesMatch('words', 'Words'), true);
+  assert.equal(projectNamesMatch('Words.xlsx', 'Words'), false);
+  assert.equal(projectNamesMatch('', 'Words'), false);
 });
 
 function memoryDirectory() {

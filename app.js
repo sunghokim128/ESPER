@@ -53,6 +53,7 @@ import {
   projectNameFromFileName,
   projectNameKey,
   projectNameExists,
+  projectNamesMatch,
   removeProjectDirectory,
   readFsrsDataFile,
   saveProject,
@@ -65,7 +66,7 @@ import {
   saveStudySettings as saveStudySettingsToStore,
   readStudyRecordFile,
   writeStudyRecordFile,
-} from './lib/projectStore.js?v=7';
+} from './lib/projectStore.js?v=8';
 import { recoverWorkbookProjects } from './lib/projectRecovery.js?v=7';
 import {
   DEFAULT_DAILY_NEW_CARDS,
@@ -2767,7 +2768,15 @@ async function deleteProject(id) {
       `This project has study records. To delete it, type the project name exactly: ${project.name}`
     ));
     if (enteredName === null) return;
-    if (enteredName !== project.name) {
+    const enteredFileName = enteredName ? projectNameFromFileName(enteredName) : '';
+    if (
+      !enteredName ||
+      (
+        !projectNamesMatch(enteredName, project.name) &&
+        !projectNamesMatch(enteredFileName, project.name) &&
+        !projectNamesMatch(enteredName, project.fileName)
+      )
+    ) {
       state.notice = L('프로젝트 이름이 일치하지 않아 삭제를 취소했어요.', 'Project name did not match; deletion was canceled.');
       render();
       return;
