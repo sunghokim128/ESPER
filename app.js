@@ -317,6 +317,7 @@ const state = {
   revealedA4Values: new Set(),
   hiddenA4Values: new Set(),
   expandedA4Hints: new Set(),
+  a4HintStart: 'value',
   a4EditingCard: null,
   a4EditError: '',
   a4EditSaving: false,
@@ -4423,6 +4424,13 @@ function a4ViewHTML() {
             <h2 id="a4ViewSettingsTitle">${L('표시 설정', 'Display')}</h2>
             <button type="button" id="toggleAllValuesBtn" class="btn a4-settings-control a4-values-toggle" aria-pressed="${state.showAllA4Values}" data-study-hint="${L('전체 value 보기','Show all values')}">${state.showAllA4Values ? L('전체 value 가리기','Hide all values') : L('전체 value 보기','Show all values')}</button>
             <button type="button" id="toggleAllHintsBtn" class="btn a4-settings-control" aria-pressed="false" data-study-hint="${L('전체 hint 보기','Show all hints')}">${L('전체 hint 보기','Show all hints')}</button>
+            <div class="a4-hint-start-control" data-a4-hint-start-control hidden>
+              <span class="a4-hint-start-label">${L('힌트 시작 위치', 'Hint starts at')}</span>
+              <div class="a4-hint-start-options" role="group" aria-label="${L('힌트 시작 위치', 'Hint start position')}">
+                <button type="button" class="a4-hint-start-option" data-a4-hint-start="key" aria-pressed="${state.a4HintStart === 'key'}">${L('Key 부분 시작', 'Start at Key')}</button>
+                <button type="button" class="a4-hint-start-option" data-a4-hint-start="value" aria-pressed="${state.a4HintStart === 'value'}">${L('Value 부분 시작', 'Start at Value')}</button>
+              </div>
+            </div>
             <button type="button" id="a4SwapBtn" class="btn a4-settings-control" aria-pressed="${state.studySettings.swapKeyValue}" data-study-hint="${L('key와 value의 앞뒤를 바꿔서 표시합니다.','Swap which side is shown as key and value.')}">${L('key-value 반전','Swap key-value')}</button>
             <label class="study-font-setting a4-image-gauge${a4HasImage ? '' : ' is-disabled'}"${a4HasImage ? '' : ` title="${L('이미지가 없어요', 'No images in this deck')}"`}>
               <span>${L('이미지', 'Image')}</span>
@@ -4563,7 +4571,7 @@ function a4SheetHTML(rows, pageNumber, pageCount, isLastPage = false, sectionLab
                   const valueVisible = isA4ValueVisible(row.id);
                   const hintVisible = state.expandedA4Hints.has(row.id);
                   const hasHint = row.hasStudyHint;
-                  return `<div class="sheet-row study-sheet-row${hintVisible ? ' study-hint-visible' : ''}" data-study-id="${esc(row.id)}" style="flex-grow:${isLastPage || hintVisible ? 0 : 1}">
+                  return `<div class="sheet-row study-sheet-row${hintVisible ? ' study-hint-visible' : ''}${hintVisible && state.a4HintStart === 'key' ? ' study-hint-start-key' : ''}" data-study-id="${esc(row.id)}" style="flex-grow:${isLastPage || hintVisible ? 0 : 1}">
                     <button type="button" class="col-no a4-edit-number" data-a4-edit-toggle="${esc(row.id)}" aria-expanded="false" aria-label="${esc(L(`${row.index}번 항목 편집`, `Edit item ${row.index}`))}">${String(row.index).padStart(3, '0')}</button>
                     <span class="col-key">
                       ${
@@ -4801,6 +4809,15 @@ function renderA4View() {
   }
   const list = a4Pages();
   const totalPages = list.length;
+  const hintStartControl = document.querySelector('[data-a4-hint-start-control]');
+  if (hintStartControl) {
+    hintStartControl.hidden = !list.some(({ rows }) =>
+      rows.some((row) => row.hasStudyHint && state.expandedA4Hints.has(row.id))
+    );
+    hintStartControl.querySelectorAll('[data-a4-hint-start]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.a4HintStart === state.a4HintStart));
+    });
+  }
   const priorityPending = state.a4Sort === 'priority' &&
     (state.a4PriorityData !== state.fsrsData || state.a4PriorityPairs !== state.pairs);
   const shuffleButton = document.getElementById('a4ReshuffleBtn');
@@ -7533,6 +7550,15 @@ function attach() {
       renderA4View();
     });
   }
+
+  document.querySelectorAll('[data-a4-hint-start]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const start = button.dataset.a4HintStart;
+      if (start !== 'key' && start !== 'value') return;
+      state.a4HintStart = start;
+      renderA4View();
+    });
+  });
 
   const studySearch = document.getElementById('studySearch');
   if (studySearch) {

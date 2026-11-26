@@ -2268,6 +2268,53 @@ body:has(.app-shell.workspace-page) {
   margin-top: 0;
 }
 
+.a4-hint-start-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.a4-hint-start-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.a4-hint-start-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #e4d9c8;
+  border-radius: 9px;
+  background: #f3eee6;
+}
+
+.a4-hint-start-option {
+  min-width: 0;
+  min-height: 26px;
+  padding: 4px 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--soft);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.a4-hint-start-option[aria-pressed="true"] {
+  background: #fffefa;
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(60, 45, 30, 0.14);
+}
+
+.a4-hint-start-option:focus-visible {
+  outline: 2px solid #8d8d99;
+  outline-offset: 1px;
+}
+
 .a4-settings-content .a4-settings-group {
   display: flex;
   flex-direction: column;
@@ -6678,6 +6725,7 @@ html[data-img-status="fill"] .learning-status-card .cell-img {
 .project-card.is-drop-before { box-shadow: inset 5px 0 #b5573a, 0 8px 24px rgba(60, 50, 30, 0.05); }
 .project-card.is-drop-after { box-shadow: inset -5px 0 #b5573a, 0 8px 24px rgba(60, 50, 30, 0.05); }
 .a4-sheet .study-hint-content { grid-column: 3 / -1; }
+.a4-sheet .study-hint-start-key .study-hint-content { grid-column: 2 / -1; }
 
 /* Learning Status: 검색 · 필터 · 투명도 설정 */
 .learning-status-screen .learning-status-card { background-color: rgba(var(--retention-rgb, 143, 63, 38), var(--retention-opacity, .08)); }
@@ -7598,6 +7646,21 @@ button.study-log-calendar-cell:hover { outline: 1px solid #a45b40; }
 
 .a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .search::placeholder {
   color: #b8b2a8;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-hint-start-label,
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-hint-start-option {
+  color: #d3cec5;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-hint-start-options {
+  border-color: rgba(255, 255, 255, .18);
+  background: #303030;
+}
+
+.a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-hint-start-option[aria-pressed="true"] {
+  background: #5a4536;
+  color: #fff;
 }
 
 .a4-view-screen.is-fullscreen:not(.settings-collapsed) .a4-settings-content .a4-settings-control {
