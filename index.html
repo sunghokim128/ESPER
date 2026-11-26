@@ -13,20 +13,33 @@
       gtag('js', new Date());
       gtag('config', 'G-97FBRP5G8P');
     </script>
-    <link rel="stylesheet" href="app.css?v=139" />
+    <link rel="stylesheet" href="app.css?v=140" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        const appScope = new URL('./', window.location.href).href;
+        navigator.serviceWorker.getRegistrations()
+          .then((registrations) => Promise.all(
+            registrations
+              .filter((registration) => registration.scope === appScope)
+              .map((registration) => registration.unregister())
+          ))
+          .catch((error) => console.warn('Could not unregister ESPER service worker.', error));
+      }
+
+      if ('caches' in window) {
+        window.caches.keys()
+          .then((cacheNames) => Promise.all(
+            cacheNames
+              .filter((name) => name.startsWith('esper-app-'))
+              .map((name) => window.caches.delete(name))
+          ))
+          .catch((error) => console.warn('Could not clear ESPER app caches.', error));
+      }
+    </script>
   </head>
   <body>
     <div id="app" class="app-shell"></div>
     <div id="printRoot" class="print-root"></div>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch((error) => {
-            console.warn('Could not register ESPER update service worker.', error);
-          });
-        });
-      }
-    </script>
-    <script type="module" src="app.js?v=139"></script>
+    <script type="module" src="app.js?v=140"></script>
   </body>
 </html>

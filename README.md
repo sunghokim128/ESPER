@@ -102,6 +102,7 @@ When you open a project or its editor, ESPER reads the workbook and reconciles i
 
 ## Data storage and privacy
 
+ESPER does not cache app files for offline use; an internet connection is required to load or reopen the app.<br>
 ESPER fetches tutorial and guide assets from its website when needed.<br>
 The main app uses Google Analytics 4 to measure visits and usage. Loading the app sends analytics data to Google, which may include browser, device, and interaction information. See [Google's Privacy Policy](https://policies.google.com/privacy).<br>
 Third-party sites are contacted only when you choose to open their links; their privacy policies apply when you visit them.
