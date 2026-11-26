@@ -3434,10 +3434,8 @@ body:has(.app-shell.workspace-page) {
 
   .print-root {
     display: block;
-    -webkit-filter: grayscale(100%);
-    filter: grayscale(100%);
-    -webkit-print-color-adjust: economy;
-    print-color-adjust: economy;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .study-tooltip {
@@ -3447,9 +3445,11 @@ body:has(.app-shell.workspace-page) {
   .print-root .sheet {
     position: static;
     box-shadow: none;
-    background: transparent;
-    -webkit-print-color-adjust: economy;
-    print-color-adjust: economy;
+    background: #fff;
+    -webkit-filter: grayscale(100%);
+    filter: grayscale(100%);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     break-after: page;
     page-break-after: always;
   }

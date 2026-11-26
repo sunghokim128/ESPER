@@ -1,4 +1,4 @@
-const CACHE_NAME = 'esper-app-v138';
+const CACHE_NAME = 'esper-app-v139';
 const CACHEABLE_ORIGINS = [self.location.origin];
 
 self.addEventListener('install', (event) => {
