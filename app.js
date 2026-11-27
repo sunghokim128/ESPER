@@ -7,6 +7,7 @@ import {
   createStudyWorkbook,
 } from './lib/parseSheet.js';
 import { normalizeColumnWidths, resizeAdjacentColumns } from './lib/columnSizing.js';
+import { grayscalePixels } from './lib/grayscale.js';
 import { indexStudyPairs } from './lib/studyPairs.js';
 import { AnkiImportError, buildAnkiRows, audioOnlyFields, countFieldImages, loadAnkiDeck, previewAnkiCards } from './lib/ankiImport.js?v=3';
 import { configureImageDirectory, getImageBlob, getImageUrl, hydrateImages, processImage, releaseProjectImages, saveImageBlob, saveImageFile } from './lib/imageStore.js';
@@ -692,6 +693,32 @@ async function waitForImages(root, timeoutMs = 3000) {
     const pending = [...root.querySelectorAll('img[data-img-id]')].filter((image) => !image.complete || image.dataset.imgState === 'loading');
     if (!pending.length) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+async function grayscalePrintImages(root) {
+  root.querySelectorAll('.cell-img-missing').forEach((placeholder) => {
+    placeholder.textContent = placeholder.getAttribute('aria-label') || placeholder.textContent;
+  });
+
+  for (const image of root.querySelectorAll('img')) {
+    if (!image.complete || !image.naturalWidth) {
+      throw new Error(L('인쇄할 이미지를 불러오지 못했어요.', 'Could not load an image for printing.'));
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Could not prepare an image for grayscale printing.');
+    context.drawImage(image, 0, 0);
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    grayscalePixels(imageData.data);
+    context.putImageData(imageData, 0, 0);
+    image.src = canvas.toDataURL('image/png');
+    await image.decode();
+    canvas.width = 0;
+    canvas.height = 0;
   }
 }
 
@@ -5215,33 +5242,49 @@ function supportWidgetHTML() {
 
 async function handleA4Print() {
   hideStudyTooltip();
-  if (state.a4Sort === 'priority' &&
-    (state.a4PriorityData !== state.fsrsData || state.a4PriorityPairs !== state.pairs)) {
-    await refreshA4Priority();
+  try {
+    if (state.a4Sort === 'priority' &&
+      (state.a4PriorityData !== state.fsrsData || state.a4PriorityPairs !== state.pairs)) {
+      await refreshA4Priority();
+    }
+    if (state.a4Sort === 'priority' && state.a4PriorityError) return;
+    const list = a4Pages();
+    const totalPages = list.length;
+    if (!totalPages) return;
+    await printA4Pages(list);
+  } catch (error) {
+    console.error('Could not print the A4 study sheet.', error);
+    printEl.replaceChildren();
+    state.error = L(
+      `A4 학습 자료를 인쇄하지 못했어요: ${error instanceof Error ? error.message : String(error)}`,
+      `Could not print the A4 study sheet: ${error instanceof Error ? error.message : String(error)}`
+    );
+    render();
   }
-  if (state.a4Sort === 'priority' && state.a4PriorityError) return;
-  const list = a4Pages();
-  const totalPages = list.length;
-  if (!totalPages) return;
-  await printA4Pages(list);
 }
 
 async function printA4Pages(list) {
   const totalPages = list.length;
   if (!totalPages) return;
-  printEl.innerHTML = list
-    .map(({ rows }, i) => {
-      const isLastPage = i === list.length - 1;
-      return a4PrintSheetHTML(rows, i + 1, totalPages, isLastPage);
-    })
-    .join('');
-  hydrateRenderedImages();
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  await waitForImages(printEl);
-  window.addEventListener('afterprint', () => {
+  try {
+    printEl.innerHTML = list
+      .map(({ rows }, i) => {
+        const isLastPage = i === list.length - 1;
+        return a4PrintSheetHTML(rows, i + 1, totalPages, isLastPage);
+      })
+      .join('');
+    hydrateRenderedImages();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await waitForImages(printEl);
+    await grayscalePrintImages(printEl);
+    window.addEventListener('afterprint', () => {
+      printEl.replaceChildren();
+    }, { once: true });
+    window.print();
+  } catch (error) {
     printEl.replaceChildren();
-  }, { once: true });
-  window.print();
+    throw error;
+  }
 }
 
 async function handleTailoredReviewPrint() {

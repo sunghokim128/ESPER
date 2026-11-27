@@ -16,7 +16,7 @@ ESPER combines both approaches so each can complement the other.
 1. **Excel Import** — Upload an Excel workbook (`.xlsx` or `.xlsm`) containing the material you want to study. You can also import Anki decks (`.apkg`) and ESPER share files (`.espr`).
 2. **Study Planning** — Set an exam date and target recall level. ESPER recommends a daily number of new items based on the time remaining.
 3. **Study** — Practice active recall, using hints when needed. FSRS-7 estimates how well each item is remembered and uses your **Again**, **Hard**, **Good**, or **Easy** ratings to schedule reviews. Study rounds end after 30 minutes by default; change the time limit in study settings. The study menu also prints previously studied items in learning-priority order, with the lowest estimated recall first; unstudied items are excluded.
-4. **Learning Materials** — Open the full A4 preview directly. A4 print/PDF output is rendered in grayscale; the printer's color-mode setting remains controlled by the browser and printer driver. From there, you can start Skimming, which supports fullscreen study and study-time tracking.
+4. **Learning Materials** — Open the full A4 preview directly. A4 print/PDF output contains grayscale page colors and grayscale-converted images, so color information is removed before it reaches the printer. From there, you can start Skimming, which supports fullscreen study and study-time tracking.
 
 ## Philosophy
 

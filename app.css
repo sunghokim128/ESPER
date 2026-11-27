@@ -3481,6 +3481,10 @@ body:has(.app-shell.workspace-page) {
 
   .print-root {
     display: block;
+    --sheet-line: #eaeaea;
+    --sheet-muted: #999;
+    --sheet-num: #b8b8b8;
+    --sheet-foot: #c2c2c2;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -3493,12 +3497,14 @@ body:has(.app-shell.workspace-page) {
     position: static;
     box-shadow: none;
     background: #fff;
-    -webkit-filter: grayscale(100%);
-    filter: grayscale(100%);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     break-after: page;
     page-break-after: always;
+  }
+
+  .print-root .sheet-section-label {
+    color: #555;
   }
 
   .print-root .sheet:last-child {
